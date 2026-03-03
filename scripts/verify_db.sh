@@ -1,0 +1,87 @@
+#!/bin/bash
+set -eo pipefail
+
+DB_TYPE=$1
+DATA_DIR_MOUNT="/dev/mapper/data_vg-data_lv"
+
+echo "--- Running verification for $DB_TYPE ---"
+
+check_service() {
+    local service_name=$1
+    if systemctl is-active --quiet "$service_name"; then
+        echo "  SUCCESS: $service_name service is running."
+    else
+        echo "  FAILURE: $service_name service is NOT running."
+        exit 1
+    fi
+}
+
+check_mount() {
+    local path=$1
+    local expected_device=$2
+    # Ensure the path exists before checking the mount
+    if [[ ! -d "$path" ]]; then
+        echo "  FAILURE: Data directory '$path' does not exist."
+        exit 1
+    fi
+    local actual_device=$(df --output=source "$path" | tail -n 1)
+    if [[ "$actual_device" == "$expected_device" ]]; then
+        echo "  SUCCESS: $path is mounted on $expected_device."
+    else
+        echo "  FAILURE: $path is mounted on $actual_device, expected $expected_device."
+        exit 1
+    fi
+}
+
+if [[ "$DB_TYPE" == "mysql" ]]; then
+    check_service mysqld
+    # MySQL data dir is typically /var/lib/mysql, which is a symlink in our setup
+    MYSQL_DATA_DIR="/var/lib/mysql"
+    check_mount "$MYSQL_DATA_DIR" "$DATA_DIR_MOUNT"
+    export MYSQL_PWD='MyS@L_1nSt@nce!P@$$wOrd0'
+    echo "--- Attempting MySQL connection --- "
+    set -x # Enable debug output
+    sudo --preserve-env=MYSQL_PWD mysql -u root -e "SELECT 1;"
+    mysql_exit_code=$?
+    set +x # Disable debug output
+    unset MYSQL_PWD
+    echo "--- MySQL connection attempt finished --- "
+
+    if [ ${mysql_exit_code} -eq 0 ]; then
+        echo "  SUCCESS: Can connect to MySQL."
+        export MYSQL_PWD='MyS@L_1nSt@nce!P@$$wOrd0'
+        echo "  --- MySQL Version ---"
+        sudo --preserve-env=MYSQL_PWD mysql -u root -e "SELECT version();"
+        echo "  --- MySQL Databases ---"
+        sudo --preserve-env=MYSQL_PWD mysql -u root -e "SHOW DATABASES;"
+        unset MYSQL_PWD
+    else
+        echo "  FAILURE: Cannot connect to MySQL. Exit code: ${mysql_exit_code}"
+        echo "  --- MySQL Log --- "
+        sudo tail -n 20 /var/log/mysqld.log
+        exit 1
+    fi
+
+elif [[ "$DB_TYPE" == "postgres" ]]; then
+    check_service postgresql
+    # PostgreSQL data dir is typically /var/lib/postgresql/VERSION/main, which is a symlink
+    PG_VERSION=$(ls /etc/postgresql/ | head -n 1)
+    PG_DATA_DIR="/var/lib/postgresql/${PG_VERSION}/main"
+    check_mount "$PG_DATA_DIR" "$DATA_DIR_MOUNT"
+    if sudo -u postgres psql -c "SELECT 1;" > /dev/null 2>&1; then
+        echo "  SUCCESS: Can connect to PostgreSQL."
+        echo "  --- PostgreSQL Version ---"
+        sudo -u postgres psql -c "SELECT version();"
+        echo "  --- PostgreSQL Databases ---"
+        sudo -u postgres psql -l
+    else
+        echo "  FAILURE: Cannot connect to PostgreSQL."
+        exit 1
+    fi
+else
+    echo "  FAILURE: Unknown DB_TYPE '$DB_TYPE'. Use 'mysql' or 'postgres'."
+    exit 1
+fi
+
+echo "--- $DB_TYPE verification complete. ---"
+exit 0

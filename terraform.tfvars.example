@@ -1,0 +1,6 @@
+project_id = "project_name1" # Replace with your GCP Project ID
+region     = "asia-southeast1"
+zone       = "asia-southeast1-a"
+network_name = "vpc1"
+subnetwork_name = "asia-southeast1-subnet"
+subnetwork_ip_cidr_range = "10.142.0.0/24"
