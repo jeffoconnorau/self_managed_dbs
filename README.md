@@ -1,13 +1,18 @@
-# Self-Managed Databases on GCP with Terraform
+# Self-Managed Databases on Google Compute Engine with Terraform
 
-This repository contains Terraform code to provision two Google Compute Engine VMs, one running Rocky Linux with MySQL and the other running Ubuntu with PostgreSQL. Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups.
+This repository contains Terraform code to provision two Google Compute Engine VMs within a Virtual Private Cloud (VPC):
+
+1.  **Rocky Linux 9** running **MySQL**
+2.  **Ubuntu 22.04 LTS** running **PostgreSQL**
+
+Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
 
 ## Prerequisites
 
-1.  **Google Cloud SDK:** Install and initialize `gcloud`.
-2.  **Terraform:** Install Terraform CLI.
+1.  **Google Cloud SDK:** Install and initialize `gcloud` ([SDK Install Guide](https://cloud.google.com/sdk/docs/install)).
+2.  **Terraform:** Install Terraform CLI ([Terraform Install Guide](https://learn.hashicorp.com/tutorials/terraform/install-cli)). Version ~> 7.20.0 for the Google provider is required.
 3.  **GCP Project:** Have a GCP project with billing enabled.
-4.  **Permissions:** Ensure you have necessary permissions to create VPCs, Subnets, Firewall Rules, Compute Instances, and Disks.
+4.  **Permissions:** Ensure your GCP account has necessary permissions to create VPCs, Subnets, Firewall Rules, Compute Instances, Disks, Cloud Routers, and Cloud NAT.
 
 ## Directory Structure
 
@@ -19,7 +24,8 @@ This repository contains Terraform code to provision two Google Compute Engine V
 ├── outputs.tf          # Outputs
 ├── scripts/
 │   ├── mysql_setup.sh  # Startup script for Rocky/MySQL
-│   └── postgres_setup.sh # Startup script for Ubuntu/PostgreSQL
+│   ├── postgres_setup.sh # Startup script for Ubuntu/PostgreSQL
+│   └── verify_db.sh    # Verification script for both DBs
 └── README.md           # This file
 ```
 
@@ -32,62 +38,71 @@ This repository contains Terraform code to provision two Google Compute Engine V
     ```
 
 2.  **Configure Variables:**
-    Edit `terraform.tfvars` and replace `"Your-GCP-Project-ID"` with your actual GCP Project ID:
+    Edit the `terraform.tfvars` file to match your GCP environment. **MANDATORY fields to update:**
+
     ```terraform
-    project_id = "Your-GCP-Project-ID"
-    region     = "us-central1"
-    zone       = "us-central1-a"
+    project_id = "Your-GCP-Project-ID"  # Replace with your actual GCP Project ID
+    region     = "us-central1"          # Optional: Change to your desired region
+    zone       = "us-central1-a"        # Optional: Change to your desired zone
+
+    # Optional: Configure existing or new network details
+    network_name = "self-managed-dbs-vpc"    # Name for the VPC
+    subnetwork_name = "self-managed-dbs-subnet" # Name for the Subnet
+    subnetwork_ip_cidr_range = "10.128.0.0/20" # CIDR range for the Subnet
     ```
 
 3.  **Initialize Terraform:**
+    This downloads necessary provider plugins.
     ```bash
     terraform init
     ```
 
 4.  **Plan the deployment:**
+    Review the changes Terraform will make.
     ```bash
     terraform plan
     ```
-    Review the plan to ensure it's going to create the resources as expected.
 
 5.  **Apply the configuration:**
+    This provisions all the resources in your GCP project.
     ```bash
     terraform apply -auto-approve
     ```
-    This will provision all the resources. The startup scripts will run on the first boot of each VM to install and configure the databases.
+    The startup scripts will run on the first boot of each VM to install and configure the databases.
 
 ## Connecting to the VMs
 
-Once applied, Terraform will output the external IP addresses and SSH commands for each VM.
+SSH access is facilitated via `gcloud`. The VMs do not have external IP addresses. Use the commands provided in the Terraform output:
 
 *   **To SSH into the Rocky/MySQL VM:**
     ```bash
-    # Command will be shown in terraform output 'ssh_command_rocky'
-    # Example:
-    # gcloud compute ssh --project Your-GCP-Project-ID --zone us-central1-a rocky-mysql-vm
+    # Use the command from terraform output 'ssh_command_rocky'
     ```
 
 *   **To SSH into the Ubuntu/PostgreSQL VM:**
     ```bash
-    # Command will be shown in terraform output 'ssh_command_ubuntu'
-    # Example:
-    # gcloud compute ssh --project Your-GCP-Project-ID --zone us-central1-a ubuntu-postgres-vm
+    # Use the command from terraform output 'ssh_command_ubuntu'
     ```
 
 ## Verifying Database Installations
 
-A verification script `scripts/verify_db.sh` is included. You can run this on each VM after SSHing:
+A verification script `scripts/verify_db.sh` is included. You need to copy it to each VM and run it.
 
-1.  **Copy the script to the VM:**
+Get your project ID and zone from your `terraform.tfvars` file.
+
+PROJECT_ID="$(grep project_id terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
+ZONE="$(grep zone terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
+
+1.  **Copy the script to the VMs:**
 
     *   For Rocky/MySQL:
         ```bash
-        gcloud compute scp scripts/verify_db.sh rocky-mysql-vm:~ --project argo-svc-dev-3 --zone asia-southeast1-a
+        gcloud compute scp scripts/verify_db.sh rocky-mysql-vm:~ --project $PROJECT_ID --zone $ZONE
         ```
 
     *   For Ubuntu/PostgreSQL:
         ```bash
-        gcloud compute scp scripts/verify_db.sh ubuntu-postgres-vm:~ --project argo-svc-dev-3 --zone asia-southeast1-a
+        gcloud compute scp scripts/verify_db.sh ubuntu-postgres-vm:~ --project $PROJECT_ID --zone $ZONE
         ```
 
 2.  **SSH into the VM and Run the script:**
@@ -95,8 +110,8 @@ A verification script `scripts/verify_db.sh` is included. You can run this on ea
     *   **Rocky/MySQL VM:**
         ```bash
         # SSH first using the command from terraform output 'ssh_command_rocky'
-        gcloud compute ssh --project argo-svc-dev-3 --zone asia-southeast1-a rocky-mysql-vm
-        
+        gcloud compute ssh --project $PROJECT_ID --zone $ZONE rocky-mysql-vm
+
         # Once inside:
         chmod +x verify_db.sh
         sudo ./verify_db.sh mysql
@@ -105,8 +120,8 @@ A verification script `scripts/verify_db.sh` is included. You can run this on ea
     *   **Ubuntu/PostgreSQL VM:**
         ```bash
         # SSH first using the command from terraform output 'ssh_command_ubuntu'
-        gcloud compute ssh --project argo-svc-dev-3 --zone asia-southeast1-a ubuntu-postgres-vm
-        
+        gcloud compute ssh --project $PROJECT_ID --zone $ZONE ubuntu-postgres-vm
+
         # Once inside:
         chmod +x verify_db.sh
         sudo ./verify_db.sh postgres
@@ -114,17 +129,13 @@ A verification script `scripts/verify_db.sh` is included. You can run this on ea
 
 The script will output SUCCESS or FAILURE for each check (service status, data disk mount, database connection).
 
-## Disk Layout
+## Disk Layout & Mounts
 
-*   `/dev/sda`: Operating System (auto-deleted with VM by default)
-*   `/dev/sdb`: Data disk (deleted as it's a Terraform-managed resource)
-*   `/dev/sdc`: Backup disk (deleted as it's a Terraform-managed resource)
+*   `/dev/sda` (OS Disk): Mounted at `/`
+*   `/dev/sdb` (Data Disk): Mounted at `/var/lib/mysql_data` (MySQL) or `/var/lib/postgresql_data` (PostgreSQL)
+*   `/dev/sdc` (Backup Disk): Mounted at `/var/lib/mysql_backups` (MySQL) or `/var/lib/postgresql_backups` (PostgreSQL)
 
-## Disk Mounts
-
-*   `/dev/sda`: Operating System
-*   `/dev/sdb`: Mounted at `/var/lib/mysql_data` (MySQL) or `/var/lib/postgresql_data` (PostgreSQL)
-*   `/dev/sdc`: Mounted at `/var/lib/mysql_backups` (MySQL) or `/var/lib/postgresql_backups` (PostgreSQL)
+All disks are Terraform-managed and will be deleted upon destroy.
 
 ## Cleaning Up
 
@@ -136,7 +147,6 @@ terraform destroy -auto-approve
 
 ## Notes
 
-*   The default database passwords are set to `YourSecurePassword1!`. **CHANGE THESE IN A PRODUCTION ENVIRONMENT.**
-*   Firewall rules only allow SSH access. You may need to add rules for database ports (3306 for MySQL, 5432 for PostgreSQL) if you need to connect from outside the VPC.
-*   The VMs are using `e2-small` machine types and standard persistent disks to minimize costs. Adjust as needed in `variables.tf` or `terraform.tfvars`.
-```
+*   The default database passwords are set to `YourSecurePassword1!`. **CHANGE THESE IN A PRODUCTION ENVIRONMENT.** This can be done by modifying the `mysql_setup.sh` and `postgres_setup.sh` scripts before applying.
+*   Firewall rules only allow SSH access from Google's IAP ranges. Database ports (3306, 5432) are not exposed externally.
+*   The VMs use `e2-medium` machine types by default. Adjust as needed in `variables.tf` or `terraform.tfvars`.
