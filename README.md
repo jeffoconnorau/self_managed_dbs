@@ -5,7 +5,7 @@ This repository contains Terraform code to provision two Google Compute Engine V
 1.  **Rocky Linux 9** running **MySQL**
 2.  **Ubuntu 22.04 LTS** running **PostgreSQL**
 
-Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
+Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access. A default database is created on each instance.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ Each VM is configured with three persistent disks: one for the OS, one for the d
     ```
 
 2.  **Configure Variables:**
-    Edit the `terraform.tfvars` file to match your GCP environment. **MANDATORY fields to update:**
+    Edit the `terraform.tfvars` file to match your GCP environment. Key variables:
 
     ```terraform
     project_id = "Your-GCP-Project-ID"  # Replace with your actual GCP Project ID
@@ -49,7 +49,12 @@ Each VM is configured with three persistent disks: one for the OS, one for the d
     network_name = "self-managed-dbs-vpc"    # Name for the VPC
     subnetwork_name = "self-managed-dbs-subnet" # Name for the Subnet
     subnetwork_ip_cidr_range = "10.128.0.0/20" # CIDR range for the Subnet
+
+    # Optional: Customize default database names
+    mysql_db_name = "db1"
+    postgres_db_name = "db1"
     ```
+    The startup scripts will create a database with the name specified in `mysql_db_name` or `postgres_db_name` on the respective instances.
 
 3.  **Initialize Terraform:**
     This downloads necessary provider plugins.
@@ -68,7 +73,26 @@ Each VM is configured with three persistent disks: one for the OS, one for the d
     ```bash
     terraform apply -auto-approve
     ```
-    The startup scripts will run on the first boot of each VM to install and configure the databases.
+    The startup scripts will run on the first boot of each VM to install and configure the databases, including creating a database named as per the variables.
+
+## Deploying Single Instances (Optional)
+
+If you only need to test one database type, you can target specific resources:
+
+*   **To deploy only the MySQL VM and its resources:**
+    ```bash
+    terraform apply -auto-approve -target=google_compute_instance.rocky_mysql_vm -target=google_compute_disk.rocky_data_disk -target=google_compute_disk.rocky_backup_disk
+    ```
+    *Note: This assumes the network resources are already present or you include them in the targets.*
+
+*   **To deploy only the PostgreSQL VM and its resources:**
+    ```bash
+    terraform apply -auto-approve -target=google_compute_instance.ubuntu_postgres_vm -target=google_compute_disk.ubuntu_data_disk -target=google_compute_disk.ubuntu_backup_disk
+    ```
+    *Note: This assumes the network resources are already present or you include them in the targets.*
+
+    To target network resources as well, add:
+    `-target=google_compute_network.vpc_network -target=google_compute_subnetwork.subnet -target=google_compute_firewall.allow_ssh -target=google_compute_router.router -target=google_compute_router_nat.nat`
 
 ## Connecting to the VMs
 
@@ -90,8 +114,10 @@ A verification script `scripts/verify_db.sh` is included. You need to copy it to
 
 Get your project ID and zone from your `terraform.tfvars` file.
 
+```bash
 PROJECT_ID="$(grep project_id terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
 ZONE="$(grep zone terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
+```
 
 1.  **Copy the script to the VMs:**
 
@@ -109,7 +135,6 @@ ZONE="$(grep zone terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
 
     *   **Rocky/MySQL VM:**
         ```bash
-        # SSH first using the command from terraform output 'ssh_command_rocky'
         gcloud compute ssh --project $PROJECT_ID --zone $ZONE rocky-mysql-vm
 
         # Once inside:
@@ -119,7 +144,6 @@ ZONE="$(grep zone terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
 
     *   **Ubuntu/PostgreSQL VM:**
         ```bash
-        # SSH first using the command from terraform output 'ssh_command_ubuntu'
         gcloud compute ssh --project $PROJECT_ID --zone $ZONE ubuntu-postgres-vm
 
         # Once inside:
@@ -137,13 +161,15 @@ The script will output SUCCESS or FAILURE for each check (service status, data d
 
 All disks are Terraform-managed and will be deleted upon destroy.
 
-## Cleaning Up
+## Cleaning Up / Destroying Resources
 
-To destroy all resources created by Terraform:
+When you are finished with the test environment, you can destroy all the resources created by Terraform using the following command in the root directory of this repository:
 
 ```bash
 terraform destroy -auto-approve
 ```
+
+This will de-provision the VMs, disks, network resources, etc.
 
 ## Notes
 

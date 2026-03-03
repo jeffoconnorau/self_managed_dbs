@@ -69,6 +69,9 @@ resource "google_compute_instance" "rocky_mysql_vm" {
     subnetwork = google_compute_subnetwork.subnet.id
   }
 
+  metadata = {
+    MYSQL_DB_NAME = var.mysql_db_name
+  }
   metadata_startup_script = file("${path.module}/scripts/mysql_setup.sh")
 
   shielded_instance_config {
@@ -124,6 +127,9 @@ resource "google_compute_instance" "ubuntu_postgres_vm" {
     subnetwork = google_compute_subnetwork.subnet.id
   }
 
+  metadata = {
+    POSTGRES_DB_NAME = var.postgres_db_name
+  }
   metadata_startup_script = file("${path.module}/scripts/postgres_setup.sh")
 
   shielded_instance_config {

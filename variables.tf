@@ -58,6 +58,18 @@ variable "disk_size_gb" {
 }
 
 variable "os_disk_size_gb" {
+
+variable "mysql_db_name" {
+  description = "The default database name to create in MySQL."
+  type        = string
+  default     = "db1"
+}
+
+variable "postgres_db_name" {
+  description = "The default database name to create in PostgreSQL."
+  type        = string
+  default     = "db1"
+}
   description = "The size of the OS disk in GB."
   type        = number
   default     = 20

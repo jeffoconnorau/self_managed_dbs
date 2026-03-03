@@ -137,8 +137,11 @@ else
     sudo mysql -u root -p"${NEW_PASSWORD}" -e "DROP DATABASE IF EXISTS test;"
     sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';"
     sudo mysql -u root -p"${NEW_PASSWORD}" -e "FLUSH PRIVILEGES;"
-    # Create db1
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS db1;"
+    # Get DB name from metadata
+DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/MYSQL_DB_NAME)
+
+# Create database
+sudo mysql -u root -p"${NEW_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 
     # Update verify_db.sh script with the new password
     # This assumes verify_db.sh is in the same directory as mysql_setup.sh on the VM

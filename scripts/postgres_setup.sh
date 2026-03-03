@@ -8,10 +8,13 @@ sudo systemctl enable --now postgresql
 
 # Set password for postgres user
 sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'YourSecurePassword1!';"
-if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw db1; then
-    sudo -u postgres createdb db1
+# Get DB name from metadata
+DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/POSTGRES_DB_NAME)
+
+if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw ${DB_NAME}; then
+    sudo -u postgres createdb ${DB_NAME}
 else
-    echo "Database db1 already exists."
+    echo "Database ${DB_NAME} already exists."
 fi
 
 # --- LVM Setup for Data Disk ---
