@@ -199,7 +199,10 @@ fi
 echo "Configuring backups..."
 
 # 1. Fetch backup config
-RETENTION_DAYS=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS)
+# 1. Fetch backup config
+RETENTION_DAYS=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS || echo "3")
+RETENTION_DAYS_FULL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_FULL || echo "${RETENTION_DAYS}")
+RETENTION_DAYS_LOG=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_LOG || echo "${RETENTION_DAYS}")
 FULL_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS)
 LOG_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES)
 BACKUP_SCRIPT_CONTENT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
@@ -225,7 +228,7 @@ if [ "${LOG_INTERVAL}" -ge 60 ]; then
 fi
 
 # Write cron job
-echo "${CRON_SCHEDULE} root DB_TYPE=mysql BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS=${RETENTION_DAYS} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
+echo "${CRON_SCHEDULE} root DB_TYPE=mysql BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
 
 echo "Backup configuration complete."
 

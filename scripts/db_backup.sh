@@ -142,13 +142,19 @@ perform_postgres_log() {
 }
 
 cleanup_retention() {
-    log "Running retention cleanup (Retention: ${RETENTION_DAYS} days)..."
+    # Fallback for backward compatibility
+    RETENTION_DAYS_FULL="${RETENTION_DAYS_FULL:-$RETENTION_DAYS}"
+    RETENTION_DAYS_LOG="${RETENTION_DAYS_LOG:-$RETENTION_DAYS}"
+
+    log "Running retention cleanup..."
+    log "  Full Backup Retention: ${RETENTION_DAYS_FULL} days"
+    log "  Log Backup Retention:  ${RETENTION_DAYS_LOG} days"
     
     # Find directories (YYYY-MM-DD) older than retention days and remove them
     # We look inside $INSTANCE_NAME/full/ and $INSTANCE_NAME/logs/
     
-    find "${BACKUP_ROOT}/${INSTANCE_NAME}/full" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -print -exec rm -rf {} +
-    find "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -print -exec rm -rf {} +
+    find "${BACKUP_ROOT}/${INSTANCE_NAME}/full" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_FULL}" -print -exec rm -rf {} +
+    find "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_LOG}" -print -exec rm -rf {} +
     
     log "Cleanup completed."
 }

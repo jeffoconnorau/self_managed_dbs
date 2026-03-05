@@ -15,15 +15,23 @@ The core feature is the unified `scripts/db_backup.sh` script, which provides:
 *   **Retention:** automated cleanup of old backups (default: 3 days).
 *   **Hierarchical Storage:** backups are organized by type (`full`/`logs`) and date on a dedicated backup disk.
 
-## Backup Configuration
+### Backup Configuration
 
-You can customize the backup schedule and retention via `terraform.tfvars`:
+Backups are handled by `scripts/db_backup.sh` and triggered via a system cron job located at `/etc/cron.d/db_backup`.
+
+The following Terraform variables control the backup settings:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `backup_retention_days` | Days to keep backups. | 3 |
-| `full_backup_interval_hours` | Hours between full backups. | 24 |
-| `log_backup_interval_minutes` | Minutes between log backups (and cron frequency). | 15 |
+| `backup_retention_days_full` | Retention period for full backups (days). | `3` |
+| `backup_retention_days_log` | Retention period for log backups (days). | `3` |
+| `full_backup_interval_hours` | Frequency of full backups (hours). | `24` |
+| `log_backup_interval_minutes` | Frequency of log backups (minutes). | `15` |
+
+**Directory Structure:**
+Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var/lib/postgresql_backups`):
+- `/<INSTANCE_NAME>/full/<YYYY-MM-DD>/`
+- `/<INSTANCE_NAME>/logs/<YYYY-MM-DD>/`
 
 Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
 

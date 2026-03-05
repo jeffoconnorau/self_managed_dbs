@@ -82,7 +82,19 @@ variable "db_password" {
 }
 
 variable "backup_retention_days" {
-  description = "Number of days to retain backups."
+  description = "Number of days to retain backups (deprecated, use specific full/log retention)."
+  type        = number
+  default     = 3
+}
+
+variable "backup_retention_days_full" {
+  description = "Number of days to retain full backups."
+  type        = number
+  default     = 3
+}
+
+variable "backup_retention_days_log" {
+  description = "Number of days to retain log backups."
   type        = number
   default     = 3
 }
