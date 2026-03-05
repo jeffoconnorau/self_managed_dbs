@@ -80,3 +80,21 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "backup_retention_days" {
+  description = "Number of days to retain backups."
+  type        = number
+  default     = 3
+}
+
+variable "full_backup_interval_hours" {
+  description = "Frequency of full backups in hours."
+  type        = number
+  default     = 24
+}
+
+variable "log_backup_interval_minutes" {
+  description = "Frequency of log backups in minutes."
+  type        = number
+  default     = 15
+}

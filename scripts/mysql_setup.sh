@@ -13,6 +13,9 @@ else
     if ! rpm -q lvm2 > /dev/null 2>&1; then
         sudo dnf install -y lvm2
     fi
+    # Activate any existing volume groups/logical volumes
+    sudo vgscan
+    sudo vgchange -ay
 
     # 2. --- LVM Setup for Data Disk ---
     DATA_DISK=/dev/sdb
@@ -191,5 +194,39 @@ EOF
 
     echo "MySQL setup complete."
 fi
+
+# --- Configure Backups ---
+echo "Configuring backups..."
+
+# 1. Fetch backup config
+RETENTION_DAYS=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS)
+FULL_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS)
+LOG_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES)
+BACKUP_SCRIPT_CONTENT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+
+# 2. Install backup script
+echo "${BACKUP_SCRIPT_CONTENT}" | sudo tee /usr/local/bin/db_backup.sh > /dev/null
+sudo chmod +x /usr/local/bin/db_backup.sh
+
+# 3. Configure MySQL Binlogs (if not already explicit)
+# MySQL 8 enables binlog by default, but we ensure settings.
+if ! grep -q "log_bin" /etc/my.cnf; then
+    sudo sed -i '/\[mysqld\]/a log_bin = /var/lib/mysql/mysql-bin' /etc/my.cnf
+    sudo sed -i '/\[mysqld\]/a server_id = 1' /etc/my.cnf
+    sudo sed -i '/\[mysqld\]/a binlog_expire_logs_seconds = 604800' /etc/my.cnf
+    sudo systemctl restart mysqld
+fi
+
+# 4. Setup Cron
+# Default to */15 if not set or weird
+CRON_SCHEDULE="*/${LOG_INTERVAL} * * * *"
+if [ "${LOG_INTERVAL}" -ge 60 ]; then
+   CRON_SCHEDULE="0 * * * *"
+fi
+
+# Write cron job
+echo "${CRON_SCHEDULE} root DB_TYPE=mysql BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS=${RETENTION_DAYS} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
+
+echo "Backup configuration complete."
 
 echo "Startup script finished."

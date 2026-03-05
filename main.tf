@@ -70,8 +70,12 @@ resource "google_compute_instance" "rocky_mysql_vm" {
   }
 
   metadata = {
-    MYSQL_DB_NAME = var.mysql_db_name
-    DB_PASSWORD   = var.db_password
+    MYSQL_DB_NAME             = var.mysql_db_name
+    DB_PASSWORD               = var.db_password
+    BACKUP_RETENTION_DAYS     = var.backup_retention_days
+    FULL_BACKUP_INTERVAL_HOURS = var.full_backup_interval_hours
+    LOG_BACKUP_INTERVAL_MINUTES = var.log_backup_interval_minutes
+    BACKUP_SCRIPT_CONTENT     = file("${path.module}/scripts/db_backup.sh")
   }
   metadata_startup_script = file("${path.module}/scripts/mysql_setup.sh")
 
@@ -129,8 +133,12 @@ resource "google_compute_instance" "ubuntu_postgres_vm" {
   }
 
   metadata = {
-    POSTGRES_DB_NAME = var.postgres_db_name
-    DB_PASSWORD      = var.db_password
+    POSTGRES_DB_NAME          = var.postgres_db_name
+    DB_PASSWORD               = var.db_password
+    BACKUP_RETENTION_DAYS     = var.backup_retention_days
+    FULL_BACKUP_INTERVAL_HOURS = var.full_backup_interval_hours
+    LOG_BACKUP_INTERVAL_MINUTES = var.log_backup_interval_minutes
+    BACKUP_SCRIPT_CONTENT     = file("${path.module}/scripts/db_backup.sh")
   }
   metadata_startup_script = file("${path.module}/scripts/postgres_setup.sh")
 

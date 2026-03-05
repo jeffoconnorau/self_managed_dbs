@@ -1,11 +1,31 @@
 # Self-Managed Databases on Google Compute Engine with Terraform
 
-This repository contains Terraform code to provision two Google Compute Engine VMs within a Virtual Private Cloud (VPC):
+The primary goal of this repository is to provision a robust, self-managed database environment with **automated, cron-scheduled backups**.
 
-1.  **Rocky Linux 9** running **MySQL**
-2.  **Ubuntu 22.04 LTS** running **PostgreSQL**
+It provisions two Google Compute Engine VMs:
 
-Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access. A default database is created on each instance.
+1.  **Rocky Linux 9** running **MySQL 8.0**
+2.  **Ubuntu 22.04 LTS** running **PostgreSQL 14**
+
+## Backup Features
+
+The core feature is the unified `scripts/db_backup.sh` script, which provides:
+*   **Full Backups:** regularly scheduled snapshots (default: daily).
+*   **Log Backups:** frequent incremental backups (default: every 15 minutes) for Point-in-Time Recovery (PITR).
+*   **Retention:** automated cleanup of old backups (default: 3 days).
+*   **Hierarchical Storage:** backups are organized by type (`full`/`logs`) and date on a dedicated backup disk.
+
+## Backup Configuration
+
+You can customize the backup schedule and retention via `terraform.tfvars`:
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `backup_retention_days` | Days to keep backups. | 3 |
+| `full_backup_interval_hours` | Hours between full backups. | 24 |
+| `log_backup_interval_minutes` | Minutes between log backups (and cron frequency). | 15 |
+
+Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
 
 ## Prerequisites
 
