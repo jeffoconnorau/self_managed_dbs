@@ -111,6 +111,7 @@ else
     # Copy data if any exists in backup
     sudo rsync -av --ignore-existing /var/lib/mysql_backup/ ${MYSQL_DATA_DIR}/mysql/
     sudo chown -R mysql:mysql ${MYSQL_DATA_DIR}/mysql
+    sudo rm -rf /var/lib/mysql_backup
 
     # Remove old datadir and create symlink
     if [ -d "/var/lib/mysql" ] && [ ! -L "/var/lib/mysql" ]; then
@@ -134,7 +135,7 @@ else
     # --- Secure MySQL Installation ---
     echo "Setting root password and securing MySQL..."
 
-    NEW_PASSWORD=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
+    NEW_PASSWORD=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
 
     # Stop service to restart with skip-grant-tables
     if systemctl is-active --quiet mysqld; then
@@ -179,7 +180,7 @@ EOF
     sudo mysql -u root -p"${NEW_PASSWORD}" -e "FLUSH PRIVILEGES;" || true
 
     # Get DB name from metadata
-    DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/MYSQL_DB_NAME)
+    DB_NAME=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/MYSQL_DB_NAME)
 
     # Create database
     sudo mysql -u root -p"${NEW_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
@@ -192,6 +193,12 @@ EOF
     # Set ownership for backup directory
     sudo chown -R mysql:mysql /var/lib/mysql_backups
 
+    # Create .my.cnf for backup script
+    echo "[client]" | sudo tee /root/.my.cnf > /dev/null
+    echo "user=root" | sudo tee -a /root/.my.cnf > /dev/null
+    echo "password=${NEW_PASSWORD}" | sudo tee -a /root/.my.cnf > /dev/null
+    sudo chmod 600 /root/.my.cnf
+
     echo "MySQL setup complete."
 fi
 
@@ -199,13 +206,15 @@ fi
 echo "Configuring backups..."
 
 # 1. Fetch backup config
-# 1. Fetch backup config
-RETENTION_DAYS=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS || echo "3")
-RETENTION_DAYS_FULL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_FULL || echo "${RETENTION_DAYS}")
-RETENTION_DAYS_LOG=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_LOG || echo "${RETENTION_DAYS}")
-FULL_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS)
-LOG_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES)
-BACKUP_SCRIPT_CONTENT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+echo "Fetching backup configuration from metadata..."
+RETENTION_DAYS=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS || echo "3")
+RETENTION_DAYS_FULL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_FULL || echo "${RETENTION_DAYS}")
+RETENTION_DAYS_LOG=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_LOG || echo "${RETENTION_DAYS}")
+FULL_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS || echo "24")
+LOG_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES || echo "15")
+BACKUP_SCRIPT_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+
+echo "Configuration fetched: FULL=${RETENTION_DAYS_FULL}, LOG=${RETENTION_DAYS_LOG}"
 
 # 2. Install backup script
 echo "${BACKUP_SCRIPT_CONTENT}" | sudo tee /usr/local/bin/db_backup.sh > /dev/null

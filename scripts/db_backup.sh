@@ -35,8 +35,20 @@ LOG_BACKUP_DIR="${BACKUP_ROOT}/${INSTANCE_NAME}/logs/${DATE_DIR}"
 LAST_FULL_BACKUP_FILE="${BACKUP_ROOT}/${INSTANCE_NAME}/last_full_backup_timestamp"
 
 # --- Setup Directories ---
+
+# --- Establish Owner ---
+if [ "$DB_TYPE" == "postgres" ]; then
+    BACKUP_USER="postgres"
+    BACKUP_GROUP="postgres"
+else
+    BACKUP_USER="mysql"
+    BACKUP_GROUP="mysql"
+fi
+
+# --- Setup Directories ---
 mkdir -p "$FULL_BACKUP_DIR"
 mkdir -p "$LOG_BACKUP_DIR"
+chown -R "${BACKUP_USER}:${BACKUP_GROUP}" "${BACKUP_ROOT}/${INSTANCE_NAME}"
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
@@ -55,6 +67,12 @@ should_run_full_backup() {
     local diff_sec=$((current_timestamp - last_timestamp))
     local interval_sec=$((FULL_BACKUP_INTERVAL_HOURS * 3600))
     
+    log "Checking Full Backup Status:"
+    log "  Last Full Backup: $last_timestamp ($(date -d @$last_timestamp))"
+    log "  Current Time:     $current_timestamp ($(date -d @$current_timestamp))"
+    log "  Diff:             $diff_sec seconds"
+    log "  Interval:         $interval_sec seconds ($FULL_BACKUP_INTERVAL_HOURS hours)"
+
     if [ "$diff_sec" -ge "$interval_sec" ]; then
         log "Full backup interval ($FULL_BACKUP_INTERVAL_HOURS hours) reached. Scheduling full backup."
         return 0 # True

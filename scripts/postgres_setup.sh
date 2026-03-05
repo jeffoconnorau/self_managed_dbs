@@ -11,12 +11,12 @@ sudo vgchange -ay
 sudo systemctl enable --now postgresql
 
 # Get password from metadata
-DB_PASSWORD=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
+DB_PASSWORD=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
 
 # Set password for postgres user
 sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${DB_PASSWORD}';"
 # Get DB name from metadata
-DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/POSTGRES_DB_NAME)
+DB_NAME=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/POSTGRES_DB_NAME)
 
 if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw ${DB_NAME}; then
     sudo -u postgres createdb ${DB_NAME}
@@ -106,10 +106,16 @@ echo "PostgreSQL setup complete."
 echo "Configuring backups..."
 
 # 1. Fetch config
-RETENTION_DAYS=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS)
-FULL_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS)
-LOG_INTERVAL=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES)
-BACKUP_SCRIPT_CONTENT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+echo "Fetching backup configuration from metadata..."
+# Check backward compatibility first, then specific
+RETENTION_DAYS=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS || echo "3")
+RETENTION_DAYS_FULL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_FULL || echo "${RETENTION_DAYS}")
+RETENTION_DAYS_LOG=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_LOG || echo "${RETENTION_DAYS}")
+FULL_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS || echo "24")
+LOG_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES || echo "15")
+BACKUP_SCRIPT_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+
+echo "Configuration fetched: FULL=${RETENTION_DAYS_FULL}, LOG=${RETENTION_DAYS_LOG}"
 
 # 2. Install backup script
 echo "${BACKUP_SCRIPT_CONTENT}" | sudo tee /usr/local/bin/db_backup.sh > /dev/null
@@ -122,15 +128,8 @@ PG_CONF="/etc/postgresql/${PG_VERSION}/main/postgresql.conf"
 INSTANCE_NAME=$(hostname)
 # Old: /var/lib/postgresql/archive_staging
 # New: /var/lib/postgresql_backups/${INSTANCE_NAME}/wal_staging
-# We still symlink from a standard location for postgres trigger simplicity or just update conf directly
-# Let's keep the symlink approach but point to new location
 
 ARCHIVE_DIR="/var/lib/postgresql/archive_staging"
-# We can keep the local symlink name simple if we want, or make it verifyable.
-# User dislikes "archive_staging". Let's name the symlink "wal_staging" too?
-# Or just point directly.
-# Let's point directly to avoid confusion if possible, or update symlink.
-# "the folder name should be the name of the database instance name" -> /var/lib/postgresql_backups/$INSTANCE_NAME
 REAL_BACKUP_ROOT="/var/lib/postgresql_backups/${INSTANCE_NAME}"
 REAL_ARCHIVE_DIR="${REAL_BACKUP_ROOT}/wal_staging"
 
@@ -149,7 +148,8 @@ if ! grep -q "^archive_mode = on" "${PG_CONF}"; then
     
     # Archive command: copy to staging
     CMD="test ! -f ${ARCHIVE_DIR}/%f && cp %p ${ARCHIVE_DIR}/%f"
-    sudo sed -i "s|#*archive_command = .*|archive_command = '${CMD}'|" "${PG_CONF}"
+    # Use c command to replace the entire line matching archive_command, handling potential existing comments
+    sudo sed -i "/^#*archive_command =.*/c\\archive_command = '${CMD}'" "${PG_CONF}"
     
     sudo systemctl restart postgresql
 fi
@@ -161,6 +161,7 @@ if [ "${LOG_INTERVAL}" -ge 60 ]; then
 fi
 
 # Write cron job
-echo "${CRON_SCHEDULE} root DB_TYPE=postgres BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS=${RETENTION_DAYS} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
+# FIXED: Use RETENTION_DAYS_FULL and RETENTION_DAYS_LOG, not RETENTION_DAYS
+echo "${CRON_SCHEDULE} root DB_TYPE=postgres BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
 
 echo "Backup configuration complete."
