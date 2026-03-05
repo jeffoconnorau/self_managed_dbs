@@ -75,6 +75,37 @@ Each VM is configured with three persistent disks: one for the OS, one for the d
     ```
     The startup scripts will run on the first boot of each VM to install and configure the databases, including creating a database named as per the variables.
 
+## Database Versions and Automation
+
+This setup automates the installation and basic configuration of:
+
+*   **MySQL 8.0** on Rocky Linux 9
+*   **PostgreSQL 14** on Ubuntu 22.04 LTS
+
+The entire database environment setup is handled by the scripts in the `scripts/` directory, which are executed on the first boot of each VM via instance metadata.
+
+### Skipping Database Installation
+
+If you only want to provision the VMs with the configured disks and networking, but *without* installing the databases, you can prevent the startup scripts from running. To do this, edit the `main.tf` file and comment out the `metadata_startup_script` attribute within the `google_compute_instance` resource blocks for the VMs you don't want to auto-configure.
+
+For example, to prevent MySQL installation on `rocky_mysql_vm`:
+
+```terraform
+resource "google_compute_instance" "rocky_mysql_vm" {
+  # ... other configuration ...
+
+  metadata = {
+    # Comment out the following line to disable automatic MySQL setup
+    # metadata_startup_script = file("${path.module}/scripts/mysql_setup.sh")
+    MYSQL_DB_NAME = var.mysql_db_name
+  }
+
+  # ... other configuration ...
+}
+```
+
+Similarly, you can comment out the line in the `ubuntu_postgres_vm` resource to prevent PostgreSQL installation. After making these changes, run `terraform apply`.
+
 ## Deploying Single Instances (Optional)
 
 If you only need to test one database type, you can target specific resources:
@@ -153,7 +184,7 @@ ZONE="$(grep zone terraform.tfvars | cut -d '=' -f 2 | tr -d ' "')"
 
 The script will output SUCCESS or FAILURE for each check (service status, data disk mount, database connection).
 
-## Disk Layout & Mounts
+Disk Layout & Mounts
 
 *   `/dev/sda` (OS Disk): Mounted at `/`
 *   `/dev/sdb` (Data Disk): Mounted at `/var/lib/mysql_data` (MySQL) or `/var/lib/postgresql_data` (PostgreSQL)
@@ -173,6 +204,7 @@ This will de-provision the VMs, disks, network resources, etc.
 
 ## Notes
 
-*   The default database passwords are set to `YourSecurePassword1!`. **CHANGE THESE IN A PRODUCTION ENVIRONMENT.** This can be done by modifying the `mysql_setup.sh` and `postgres_setup.sh` scripts before applying.
+*   The default database password is configured in `terraform.tfvars` via the `db_password` variable. **CHANGE THIS IN A PRODUCTION ENVIRONMENT.**
+    *   Default: `MyS@L_1nSt@nce!P@$$wOrd0`
 *   Firewall rules only allow SSH access from Google's IAP ranges. Database ports (3306, 5432) are not exposed externally.
 *   The VMs use `e2-medium` machine types by default. Adjust as needed in `variables.tf` or `terraform.tfvars`.

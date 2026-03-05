@@ -6,8 +6,11 @@ sudo apt install -y lvm2 postgresql postgresql-contrib
 
 sudo systemctl enable --now postgresql
 
+# Get password from metadata
+DB_PASSWORD=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
+
 # Set password for postgres user
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'YourSecurePassword1!';"
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${DB_PASSWORD}';"
 # Get DB name from metadata
 DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/POSTGRES_DB_NAME)
 
@@ -37,7 +40,7 @@ if ! mount | grep -q '/var/lib/postgresql_data'; then
     sudo mount -o discard,defaults ${DATA_LV} /var/lib/postgresql_data
 fi
 if ! grep -q "${DATA_LV}" /etc/fstab; then
-    echo ${DATA_LV} /var/lib/postgresql_data ext4 discard,defaults,NOFAIL_OPTION 0 2 | sudo tee -a /etc/fstab
+    echo ${DATA_LV} /var/lib/postgresql_data ext4 discard,defaults,nofail 0 2 | sudo tee -a /etc/fstab
 fi
 
 # Stop PostgreSQL to move data
@@ -81,7 +84,7 @@ if ! mount | grep -q '/var/lib/postgresql_backups'; then
     sudo mount -o discard,defaults ${BACKUP_LV} /var/lib/postgresql_backups
 fi
 if ! grep -q "${BACKUP_LV}" /etc/fstab; then
-    echo ${BACKUP_LV} /var/lib/postgresql_backups ext4 discard,defaults,NOFAIL_OPTION 0 2 | sudo tee -a /etc/fstab
+    echo ${BACKUP_LV} /var/lib/postgresql_backups ext4 discard,defaults,nofail 0 2 | sudo tee -a /etc/fstab
 fi
 sudo chown -R postgres:postgres /var/lib/postgresql_backups
 

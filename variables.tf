@@ -58,6 +58,10 @@ variable "disk_size_gb" {
 }
 
 variable "os_disk_size_gb" {
+  description = "The size of the OS disk in GB."
+  type        = number
+  default     = 20
+}
 
 variable "mysql_db_name" {
   description = "The default database name to create in MySQL."
@@ -70,7 +74,9 @@ variable "postgres_db_name" {
   type        = string
   default     = "db1"
 }
-  description = "The size of the OS disk in GB."
-  type        = number
-  default     = 20
+
+variable "db_password" {
+  description = "The password for the database root/postgres user."
+  type        = string
+  sensitive   = true
 }

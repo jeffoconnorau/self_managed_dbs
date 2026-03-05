@@ -71,6 +71,7 @@ resource "google_compute_instance" "rocky_mysql_vm" {
 
   metadata = {
     MYSQL_DB_NAME = var.mysql_db_name
+    DB_PASSWORD   = var.db_password
   }
   metadata_startup_script = file("${path.module}/scripts/mysql_setup.sh")
 
@@ -129,6 +130,7 @@ resource "google_compute_instance" "ubuntu_postgres_vm" {
 
   metadata = {
     POSTGRES_DB_NAME = var.postgres_db_name
+    DB_PASSWORD      = var.db_password
   }
   metadata_startup_script = file("${path.module}/scripts/postgres_setup.sh")
 

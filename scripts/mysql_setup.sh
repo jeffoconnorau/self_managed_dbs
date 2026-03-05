@@ -1,5 +1,7 @@
 #!/bin/bash
+echo "DEBUG: mysql_setup.sh starting"
 set -ex
+echo "DEBUG: set -ex done"
 
 # Check if MySQL service is already running
 if systemctl is-active --quiet mysqld; then
@@ -33,7 +35,7 @@ else
         sudo mount -o discard,defaults ${DATA_LV} ${MYSQL_DATA_DIR}
     fi
     if ! grep -q "${DATA_LV}" /etc/fstab; then
-        echo ${DATA_LV} ${MYSQL_DATA_DIR} ext4 discard,defaults,NOFAIL_OPTION 0 2 | sudo tee -a /etc/fstab
+        echo ${DATA_LV} ${MYSQL_DATA_DIR} ext4 discard,defaults,nofail 0 2 | sudo tee -a /etc/fstab
     fi
 
     # --- LVM Setup for Backup Disk ---
@@ -56,7 +58,7 @@ else
         sudo mount -o discard,defaults ${BACKUP_LV} /var/lib/mysql_backups
     fi
     if ! grep -q "${BACKUP_LV}" /etc/fstab; then
-        echo ${BACKUP_LV} /var/lib/mysql_backups ext4 discard,defaults,NOFAIL_OPTION 0 2 | sudo tee -a /etc/fstab
+        echo ${BACKUP_LV} /var/lib/mysql_backups ext4 discard,defaults,nofail 0 2 | sudo tee -a /etc/fstab
     fi
 
     # 3. Install SELinux management tools
@@ -127,24 +129,59 @@ else
     sudo systemctl enable --now mysqld
 
     # --- Secure MySQL Installation ---
-    echo "Running basic MySQL security steps..."
+    echo "Setting root password and securing MySQL..."
 
-    NEW_PASSWORD="MyS@L_1nSt@nce!P@$$wOrd0"
+    NEW_PASSWORD=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASSWORD)
+
+    # Stop service to restart with skip-grant-tables
+    if systemctl is-active --quiet mysqld; then
+        sudo systemctl stop mysqld
+    fi
+
+    echo "Starting mysqld with --skip-grant-tables..."
+    # Start mysqld directly with skip-grant-tables
+    sudo mysqld --user=mysql --daemonize --skip-grant-tables --skip-networking
+    
+    # Wait for it to start
+    for i in {1..30}; do
+        if sudo mysql -u root -e "SELECT 1" > /dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+
+    echo "Updating root password..."
+    # FLUSH PRIVILEGES is needed to reload grant tables so we can use ALTER USER
+    sudo mysql -u root <<EOF
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${NEW_PASSWORD}';
+FLUSH PRIVILEGES;
+EOF
+
+    echo "Restarting mysqld normally..."
+    # Find the pid of the manual mysqld process and kill it
+    sudo pkill mysqld
+    # Wait for it to stop
+    while pgrep mysqld > /dev/null; do sleep 1; done
+
+    sudo systemctl start mysqld
+
+    echo "Root password set. Running additional security steps..."
 
     # Basic security steps with the new password
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.user WHERE User='';"
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DROP DATABASE IF EXISTS test;"
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';"
-    sudo mysql -u root -p"${NEW_PASSWORD}" -e "FLUSH PRIVILEGES;"
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.user WHERE User='';" || true
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" || true
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DROP DATABASE IF EXISTS test;" || true
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';" || true
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "FLUSH PRIVILEGES;" || true
+
     # Get DB name from metadata
-DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/MYSQL_DB_NAME)
+    DB_NAME=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/MYSQL_DB_NAME)
 
-# Create database
-sudo mysql -u root -p"${NEW_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
+    # Create database
+    sudo mysql -u root -p"${NEW_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 
-    # Update verify_db.sh script with the new password
-    # This assumes verify_db.sh is in the same directory as mysql_setup.sh on the VM
+    # Update verify_db.sh script with the new password (if it exists on the VM)
     if [ -f "verify_db.sh" ]; then
         sed -i "s/MYSQL_PWD='.*'/MYSQL_PWD='${NEW_PASSWORD}'/" verify_db.sh
     fi
