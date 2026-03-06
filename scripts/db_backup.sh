@@ -19,7 +19,9 @@ BACKUP_ROOT="${BACKUP_DIR:-/mnt/backup}"
 RETENTION_DAYS="${RETENTION_DAYS:-3}"
 FULL_BACKUP_INTERVAL_HOURS="${FULL_BACKUP_INTERVAL_HOURS:-24}"
 # DB_TYPE must be set to 'mysql' or 'postgres'
-DB_TYPE="${DB_TYPE:-mysql}" 
+DB_TYPE="${DB_TYPE:-mysql}"
+# BACKUP_MODE can be 'auto' (default), 'full', or 'log'
+BACKUP_MODE="${BACKUP_MODE:-auto}"
 # Optional credential inputs if not using .my.cnf or .pgpass (Preferred to use Env/Connect files)
 
 # --- Derived Config ---
@@ -55,6 +57,14 @@ log() {
 }
 
 should_run_full_backup() {
+    if [ "$BACKUP_MODE" == "full" ]; then
+        log "Forced full backup mode enabled."
+        return 0 # True
+    elif [ "$BACKUP_MODE" == "log" ]; then
+        log "Forced log backup mode enabled."
+        return 1 # False
+    fi
+
     if [ ! -f "$LAST_FULL_BACKUP_FILE" ]; then
         log "No previous full backup found. Scheduling full backup."
         return 0 # True
@@ -160,19 +170,21 @@ perform_postgres_log() {
 }
 
 cleanup_retention() {
-    # Fallback for backward compatibility
-    RETENTION_DAYS_FULL="${RETENTION_DAYS_FULL:-$RETENTION_DAYS}"
-    RETENTION_DAYS_LOG="${RETENTION_DAYS_LOG:-$RETENTION_DAYS}"
+    log "Running retention cleanup for mode: ${BACKUP_MODE}..."
 
-    log "Running retention cleanup..."
-    log "  Full Backup Retention: ${RETENTION_DAYS_FULL} days"
-    log "  Log Backup Retention:  ${RETENTION_DAYS_LOG} days"
-    
-    # Find directories (YYYY-MM-DD) older than retention days and remove them
-    # We look inside $INSTANCE_NAME/full/ and $INSTANCE_NAME/logs/
-    
-    find "${BACKUP_ROOT}/${INSTANCE_NAME}/full" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_FULL}" -print -exec rm -rf {} +
-    find "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_LOG}" -print -exec rm -rf {} +
+    if [ "$BACKUP_MODE" == "full" ] || [ "$BACKUP_MODE" == "auto" ]; then
+        if [ -n "$RETENTION_DAYS_FULL" ]; then
+            log "  Full Backup Retention: ${RETENTION_DAYS_FULL} days"
+            find "${BACKUP_ROOT}/${INSTANCE_NAME}/full" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_FULL}" -print -exec rm -rf {} +
+        fi
+    fi
+
+    if [ "$BACKUP_MODE" == "log" ] || [ "$BACKUP_MODE" == "auto" ]; then
+        if [ -n "$RETENTION_DAYS_LOG" ]; then
+            log "  Log Backup Retention:  ${RETENTION_DAYS_LOG} days"
+            find "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_LOG}" -print -exec rm -rf {} +
+        fi
+    fi
     
     log "Cleanup completed."
 }

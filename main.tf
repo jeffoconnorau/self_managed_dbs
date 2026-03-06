@@ -76,6 +76,7 @@ resource "google_compute_instance" "rocky_mysql_vm" {
     BACKUP_RETENTION_DAYS_LOG  = var.backup_retention_days_log
     FULL_BACKUP_INTERVAL_HOURS = var.full_backup_interval_hours
     LOG_BACKUP_INTERVAL_MINUTES = var.log_backup_interval_minutes
+    FULL_BACKUP_TIME            = var.full_backup_time
     BACKUP_SCRIPT_CONTENT     = file("${path.module}/scripts/db_backup.sh")
   }
   metadata_startup_script = file("${path.module}/scripts/mysql_setup.sh")
@@ -140,6 +141,7 @@ resource "google_compute_instance" "ubuntu_postgres_vm" {
     BACKUP_RETENTION_DAYS_LOG  = var.backup_retention_days_log
     FULL_BACKUP_INTERVAL_HOURS = var.full_backup_interval_hours
     LOG_BACKUP_INTERVAL_MINUTES = var.log_backup_interval_minutes
+    FULL_BACKUP_TIME            = var.full_backup_time
     BACKUP_SCRIPT_CONTENT     = file("${path.module}/scripts/db_backup.sh")
   }
   metadata_startup_script = file("${path.module}/scripts/postgres_setup.sh")

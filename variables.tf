@@ -81,11 +81,6 @@ variable "db_password" {
   sensitive   = true
 }
 
-variable "backup_retention_days" {
-  description = "Number of days to retain backups (deprecated, use specific full/log retention)."
-  type        = number
-  default     = 3
-}
 
 variable "backup_retention_days_full" {
   description = "Number of days to retain full backups."
@@ -109,4 +104,10 @@ variable "log_backup_interval_minutes" {
   description = "Frequency of log backups in minutes."
   type        = number
   default     = 15
+}
+
+variable "full_backup_time" {
+  description = "Specific time to run full backups (HH:MM) in UTC. If set, a dedicated cron job is created."
+  type        = string
+  default     = "02:00"
 }

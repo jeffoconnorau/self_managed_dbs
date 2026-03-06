@@ -160,8 +160,27 @@ if [ "${LOG_INTERVAL}" -ge 60 ]; then
    CRON_SCHEDULE="0 * * * *"
 fi
 
-# Write cron job
-# FIXED: Use RETENTION_DAYS_FULL and RETENTION_DAYS_LOG, not RETENTION_DAYS
-echo "${CRON_SCHEDULE} root DB_TYPE=postgres BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup.log 2>&1" | sudo tee /etc/cron.d/db_backup
+# Write cron jobs
+# 1. Log Backups (Every 15 mins by default) - FIXED: variables
+echo "${CRON_SCHEDULE} root DB_TYPE=postgres BACKUP_MODE=log BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} /usr/local/bin/db_backup.sh >> /var/log/db_backup_log.log 2>&1" | sudo tee /etc/cron.d/db_backup
+
+# 2. Full Backups (Daily at specified time, default 02:00)
+FULL_BACKUP_TIME=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_TIME || echo "02:00")
+
+# If FULL_BACKUP_TIME is set (it should be, via default), configure it
+if [ -n "$FULL_BACKUP_TIME" ]; then
+    echo "Configuring full backup schedule: ${FULL_BACKUP_TIME}"
+    IFS=':' read -r HH MM <<< "${FULL_BACKUP_TIME}"
+    # Verify we got numbers
+    if [[ "$HH" =~ ^[0-9]+$ ]] && [[ "$MM" =~ ^[0-9]+$ ]]; then
+        echo "${MM} ${HH} * * * root DB_TYPE=postgres BACKUP_MODE=full BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} /usr/local/bin/db_backup.sh >> /var/log/db_backup_full.log 2>&1" | sudo tee -a /etc/cron.d/db_backup
+    else
+        echo "WARNING: Invalid FULL_BACKUP_TIME format: ${FULL_BACKUP_TIME}. Expected HH:MM."
+    fi
+else
+    # Fallback to auto/interval based if no time is set
+    echo "WARNING: No FULL_BACKUP_TIME set. Configuring legacy auto-backup check every hour."
+    echo "0 * * * * root DB_TYPE=postgres BACKUP_MODE=auto BACKUP_DIR=/var/lib/postgresql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup_auto.log 2>&1" | sudo tee -a /etc/cron.d/db_backup
+fi
 
 echo "Backup configuration complete."

@@ -27,6 +27,21 @@ The following Terraform variables control the backup settings:
 | `backup_retention_days_log` | Retention period for log backups (days). | `3` |
 | `full_backup_interval_hours` | Frequency of full backups (hours). | `24` |
 | `log_backup_interval_minutes` | Frequency of log backups (minutes). | `15` |
+| `full_backup_time` | Specific time to force full backups (HH:MM UTC). | `"02:00"` |
+
+### Backup Scheduling
+
+The setup scripts configure two distinct cron jobs for clean separation:
+
+1.  **Log Backups:** Runs every `log_backup_interval_minutes` (default 15m).
+    *   Command: `BACKUP_MODE=log ...`
+    *   Retention: Uses `backup_retention_days_log` only.
+2.  **Full Backups:** Runs daily at `full_backup_time` (default 02:00 UTC).
+    *   Command: `BACKUP_MODE=full ...`
+    *   Retention: Uses `backup_retention_days_full` only.
+
+*Note: If `full_backup_time` is unset, the system falls back to a legacy hourly check that triggers a full backup only if `full_backup_interval_hours` has passed.*
+
 
 **Directory Structure:**
 Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var/lib/postgresql_backups`):
