@@ -246,8 +246,8 @@ This will de-provision the VMs, disks, network resources, etc.
 
 ## Notes
 
-*   The default database password is configured in `terraform.tfvars` via the `db_password` variable. **CHANGE THIS IN A PRODUCTION ENVIRONMENT.**
-    *   Default: `MyS@L_1nSt@nce!P@$$wOrd0`
+*   The database password is configured via the `db_password` variable. This has no hardcoded default in `variables.tf` and must be provided (e.g., via `terraform.tfvars`).
+    *   Example value: `ChangeMe!123` (See `terraform.tfvars.example`)
 *   Firewall rules only allow SSH access from Google's IAP ranges. Database ports (3306, 5432) are not exposed externally.
 *   The VMs use `e2-medium` machine types by default. Adjust as needed in `variables.tf` or `terraform.tfvars`.
 *   Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
