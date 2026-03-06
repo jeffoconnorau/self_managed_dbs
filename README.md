@@ -48,7 +48,6 @@ Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var
 - `/<INSTANCE_NAME>/full/<YYYY-MM-DD>/`
 - `/<INSTANCE_NAME>/logs/<YYYY-MM-DD>/`
 
-Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.
 
 ## Prerequisites
 
@@ -63,7 +62,7 @@ Each VM is configured with three persistent disks: one for the OS, one for the d
 .
 ├── main.tf             # Main Terraform configuration
 ├── variables.tf        # Variable declarations
-├── terraform.tfvars    # Variable values (YOU NEED TO EDIT THIS)
+├── terraform.tfvars.example # Example variable values (rename to terraform.tfvars)
 ├── outputs.tf          # Outputs
 ├── scripts/
 │   ├── mysql_setup.sh  # Startup script for Rocky/MySQL
@@ -251,3 +250,4 @@ This will de-provision the VMs, disks, network resources, etc.
     *   Default: `MyS@L_1nSt@nce!P@$$wOrd0`
 *   Firewall rules only allow SSH access from Google's IAP ranges. Database ports (3306, 5432) are not exposed externally.
 *   The VMs use `e2-medium` machine types by default. Adjust as needed in `variables.tf` or `terraform.tfvars`.
+*   Each VM is configured with three persistent disks: one for the OS, one for the database binaries/data, and one for backups. The VMs do not have external IP addresses and rely on Cloud NAT for outbound internet access.

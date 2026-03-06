@@ -1,7 +1,9 @@
-project_id = "project_name1" # Replace with your GCP Project ID
+project_id = "your-gcp-project-id" # Replace with your GCP Project ID
 region     = "asia-southeast1"
 zone       = "asia-southeast1-a"
-network_name = "vpc1"
+network_name = "argo-dev-vpc"
 subnetwork_name = "asia-southeast1-subnet"
 subnetwork_ip_cidr_range = "10.142.0.0/24"
-db_password = "YourSecurePassword"
+mysql_db_name = "db1"
+postgres_db_name = "db1"
+db_password      = "ChangeMe!123" # Default password, change for production
