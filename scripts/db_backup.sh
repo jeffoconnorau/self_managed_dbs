@@ -172,17 +172,43 @@ perform_postgres_log() {
 cleanup_retention() {
     log "Running retention cleanup for mode: ${BACKUP_MODE}..."
 
+    # Helper function to delete appropriately named YYYY-MM-DD directories
+    delete_old_dirs() {
+        local target_dir=$1
+        local retention_days=$2
+        
+        if [ -d "$target_dir" ] && [ -n "$retention_days" ]; then
+            local cutoff_date
+            # Calculate the cutoff date. Directories named strictly older than this date are deleted.
+            cutoff_date=$(date -d "${retention_days} days ago" +"%Y-%m-%d")
+            log "  Cleaning up ${target_dir} older than ${cutoff_date} (${retention_days} days retention)"
+            
+            for dir in "$target_dir"/*; do
+                if [ -d "$dir" ]; then
+                    local dirname
+                    dirname=$(basename "$dir")
+                    # Check if dirname matches YYYY-MM-DD pattern precisely
+                    if [[ "$dirname" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                        # String comparison for ISO dates to determine age
+                        if [[ "$dirname" < "$cutoff_date" ]]; then
+                            log "  Deleting ancient backup dir: $dir"
+                            rm -rf "$dir"
+                        fi
+                    fi
+                fi
+            done
+        fi
+    }
+
     if [ "$BACKUP_MODE" == "full" ] || [ "$BACKUP_MODE" == "auto" ]; then
         if [ -n "$RETENTION_DAYS_FULL" ]; then
-            log "  Full Backup Retention: ${RETENTION_DAYS_FULL} days"
-            find "${BACKUP_ROOT}/${INSTANCE_NAME}/full" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_FULL}" -print -exec rm -rf {} +
+            delete_old_dirs "${BACKUP_ROOT}/${INSTANCE_NAME}/full" "$RETENTION_DAYS_FULL"
         fi
     fi
 
     if [ "$BACKUP_MODE" == "log" ] || [ "$BACKUP_MODE" == "auto" ]; then
         if [ -n "$RETENTION_DAYS_LOG" ]; then
-            log "  Log Backup Retention:  ${RETENTION_DAYS_LOG} days"
-            find "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS_LOG}" -print -exec rm -rf {} +
+            delete_old_dirs "${BACKUP_ROOT}/${INSTANCE_NAME}/logs" "$RETENTION_DAYS_LOG"
         fi
     fi
     
