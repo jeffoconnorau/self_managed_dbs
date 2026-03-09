@@ -42,6 +42,11 @@ The setup scripts configure two distinct cron jobs for clean separation:
 
 *Note: If `full_backup_time` is unset, the system falls back to a legacy hourly check that triggers a full backup only if `full_backup_interval_hours` has passed.*
 
+### Architectural Differences: Log Management
+When managing the frequent 15-minute log backups, the underlying methodologies differ based on the native capabilities of the databases:
+* **PostgreSQL (Push-based)**: Uses continuous archiving via `archive_command`. Once a 16MB WAL segment is full, Postgres natively "pushes" it to a designated `wal_staging` directory. The backup script simply sweeps this staging bucket empty every 15 minutes.
+* **MySQL (Pull-based)**: MySQL binlogs do not have a native staging trigger mechanism and rotate in-place within the live data directory. Because it cannot natively "push" closed logs aside, the backup script uses an incremental marker-file (`last_mysql_log_run`) to retroactively "pull" only the newly generated or modified binlog files since the last execution.
+
 
 **Directory Structure:**
 Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var/lib/postgresql_backups`):
