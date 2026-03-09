@@ -114,12 +114,23 @@ perform_mysql_log() {
     # Flush logs to trigger rotation
     mysql --defaults-extra-file=/root/.my.cnf -e "FLUSH BINARY LOGS;"
     
-    # Copy only binary logs modified today to prevent accumulating all historical logs in each daily folder.
-    # -newermt "$DATE_DIR 00:00:00" ensures we only sync logs that were written to today.
-    find /var/lib/mysql -maxdepth 1 -name "binlog.[0-9]*" -type f -newermt "${DATE_DIR} 00:00:00" -exec rsync -av {} "${LOG_BACKUP_DIR}/" \;
+    local marker_file="${BACKUP_ROOT}/${INSTANCE_NAME}/last_mysql_log_run"
+    
+    # To mimic the Postgres staging methodology (where only newly generated logs are moved),
+    # we use a marker file to track the last sync time and only copy binlogs modified since then.
+    if [ -f "$marker_file" ]; then
+        log "  Syncing binlogs modified since last run..."
+        find /var/lib/mysql -maxdepth 1 -name "binlog.[0-9]*" -type f -newer "$marker_file" -exec rsync -a {} "${LOG_BACKUP_DIR}/" \;
+    else
+        log "  First run detected. Syncing all current binlogs..."
+        rsync -a /var/lib/mysql/binlog.[0-9]* "${LOG_BACKUP_DIR}/"
+    fi
+    
+    # Update the marker file timestamp for the next run
+    touch "$marker_file"
     
     # Sync the index file to ensure it's up to date
-    rsync -av /var/lib/mysql/binlog.index "${LOG_BACKUP_DIR}/"
+    rsync -a /var/lib/mysql/binlog.index "${LOG_BACKUP_DIR}/"
     
     # Purge old binary logs from MySQL so they don't fill up the disk
     local retain_logs=${RETENTION_DAYS_LOG:-3}
