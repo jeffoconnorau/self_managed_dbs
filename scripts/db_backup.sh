@@ -114,14 +114,17 @@ perform_mysql_log() {
     # Flush logs to trigger rotation
     mysql --defaults-extra-file=/root/.my.cnf -e "FLUSH BINARY LOGS;"
     
-    # Copy all binary logs. 
-    # Assumption: /var/lib/mysql is the data dir. 
-    # We use rsync to copy logs. We might copy active logs too, but that's safe-ish if we just need the file.
-    # Better to copy all "binlog.*" files.
-    # NOTE: This assumes standard binlog naming. Adjust if 'mysql-bin' prefix starts differing.
+    # Copy only binary logs modified today to prevent accumulating all historical logs in each daily folder.
+    # -newermt "$DATE_DIR 00:00:00" ensures we only sync logs that were written to today.
+    find /var/lib/mysql -maxdepth 1 -name "binlog.[0-9]*" -type f -newermt "${DATE_DIR} 00:00:00" -exec rsync -av {} "${LOG_BACKUP_DIR}/" \;
     
-    # We just rsync additively.
-    rsync -av /var/lib/mysql/binlog.* "${LOG_BACKUP_DIR}/"
+    # Sync the index file to ensure it's up to date
+    rsync -av /var/lib/mysql/binlog.index "${LOG_BACKUP_DIR}/"
+    
+    # Purge old binary logs from MySQL so they don't fill up the disk
+    local retain_logs=${RETENTION_DAYS_LOG:-3}
+    mysql --defaults-extra-file=/root/.my.cnf -e "PURGE BINARY LOGS BEFORE DATE_SUB(NOW(), INTERVAL ${retain_logs} DAY);"
+    
     log "MySQL Log Backup completed."
 }
 
