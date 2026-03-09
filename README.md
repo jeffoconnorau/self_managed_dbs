@@ -29,18 +29,29 @@ The following Terraform variables control the backup settings:
 | `log_backup_interval_minutes` | Frequency of log backups (minutes). | `15` |
 | `full_backup_time` | Specific time to force full backups (HH:MM UTC). | `"02:00"` |
 
-### Backup Scheduling
+### Backup Scheduling Details
 
-The setup scripts configure two distinct cron jobs for clean separation:
+The setup scripts configure two distinct cron jobs located at `/etc/cron.d/db_backup`. They provide clean separation between log and full backups:
 
-1.  **Log Backups:** Runs every `log_backup_interval_minutes` (default 15m).
-    *   Command: `BACKUP_MODE=log ...`
-    *   Retention: Uses `backup_retention_days_log` only.
-2.  **Full Backups:** Runs daily at `full_backup_time` (default 02:00 UTC).
-    *   Command: `BACKUP_MODE=full ...`
-    *   Retention: Uses `backup_retention_days_full` only.
+#### 1. Log Backups (Incremental & PITR)
+Runs every `log_backup_interval_minutes` (default 15m) to capture new continuous archive logs.
+*   **Command Scope:** `BACKUP_MODE=log`
+*   **Retention Variable:** Uses `backup_retention_days_log`
+*   **Cron Example:** 
+    ```cron
+    */15 * * * * root DB_TYPE=mysql BACKUP_MODE=log BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=rocky-mysql-vm RETENTION_DAYS_LOG=3 /usr/local/bin/db_backup.sh >> /var/log/db_backup_log.log 2>&1
+    ```
 
-*Note: If `full_backup_time` is unset, the system falls back to a legacy hourly check that triggers a full backup only if `full_backup_interval_hours` has passed.*
+#### 2. Full Backups (Daily Snapshots)
+Runs daily at exactly `full_backup_time` (default 02:00 UTC).
+*   **Command Scope:** `BACKUP_MODE=full`
+*   **Retention Variable:** Uses `backup_retention_days_full`
+*   **Cron Example:**
+    ```cron
+    00 02 * * * root DB_TYPE=mysql BACKUP_MODE=full BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=rocky-mysql-vm RETENTION_DAYS_FULL=3 /usr/local/bin/db_backup.sh >> /var/log/db_backup_full.log 2>&1
+    ```
+
+*Note: If `full_backup_time` is unset in your variables, the system falls back to a legacy hourly check that triggers an auto backup (`BACKUP_MODE=auto`) only if `full_backup_interval_hours` has passed since the last snapshot.*
 
 ### Architectural Differences: Log Management
 When managing the frequent 15-minute log backups, the underlying methodologies differ based on the native capabilities of the databases:
