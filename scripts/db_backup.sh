@@ -116,21 +116,51 @@ perform_mysql_log() {
     
     local marker_file="${BACKUP_ROOT}/${INSTANCE_NAME}/last_mysql_log_run"
     
+    # Dynamically find binlog basename and index
+    local log_bin_basename
+    log_bin_basename=$(mysql --defaults-extra-file=/root/.my.cnf -NBe "SELECT @@log_bin_basename;" 2>/dev/null || true)
+    local log_bin_index
+    log_bin_index=$(mysql --defaults-extra-file=/root/.my.cnf -NBe "SELECT @@log_bin_index;" 2>/dev/null || true)
+
+    # Fallback to defaults if variables are empty (e.g. if SQL fails or variables not supported)
+    if [ -z "$log_bin_basename" ]; then
+        log "WARNING: Could not determine log_bin_basename via SQL. Falling back to /var/lib/mysql/mysql-bin"
+        log_bin_basename="/var/lib/mysql/mysql-bin"
+    fi
+    if [ -z "$log_bin_index" ]; then
+        log_bin_index="/var/lib/mysql/mysql-bin.index"
+    fi
+
+    # Resolve any symlinks to get the real directory path (crucial for rsync/find wildcards)
+    local real_log_bin_basename
+    real_log_bin_basename=$(readlink -f "$log_bin_basename")
+
+    local binlog_dir
+    binlog_dir=$(dirname "$real_log_bin_basename")
+    local binlog_prefix
+    binlog_prefix=$(basename "$real_log_bin_basename")
+
+    log "  Detected binlog_dir: $binlog_dir, prefix: $binlog_prefix"
+
     # To mimic the Postgres staging methodology (where only newly generated logs are moved),
     # we use a marker file to track the last sync time and only copy binlogs modified since then.
     if [ -f "$marker_file" ]; then
         log "  Syncing binlogs modified since last run..."
-        find /var/lib/mysql -maxdepth 1 -name "binlog.[0-9]*" -type f -newer "$marker_file" -exec rsync -a {} "${LOG_BACKUP_DIR}/" \;
+        find "$binlog_dir" -maxdepth 1 -name "${binlog_prefix}.[0-9]*" -type f -newer "$marker_file" -exec rsync -a {} "${LOG_BACKUP_DIR}/" \;
     else
         log "  First run detected. Syncing all current binlogs..."
-        rsync -a /var/lib/mysql/binlog.[0-9]* "${LOG_BACKUP_DIR}/"
+        rsync -a "${binlog_dir}/${binlog_prefix}".[0-9]* "${LOG_BACKUP_DIR}/"
     fi
     
     # Update the marker file timestamp for the next run
     touch "$marker_file"
     
     # Sync the index file to ensure it's up to date
-    rsync -a /var/lib/mysql/binlog.index "${LOG_BACKUP_DIR}/"
+    if [ -f "$log_bin_index" ]; then
+        rsync -a "$log_bin_index" "${LOG_BACKUP_DIR}/"
+    else
+        log "WARNING: log_bin_index file not found at $log_bin_index"
+    fi
     
     # Purge old binary logs from MySQL so they don't fill up the disk
     local retain_logs=${RETENTION_DAYS_LOG:-3}

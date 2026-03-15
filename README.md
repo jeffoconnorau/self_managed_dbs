@@ -60,7 +60,7 @@ When managing the frequent 15-minute log backups, the underlying methodologies d
 
 
 **Directory Structure:**
-Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var/lib/postgresql_backups`):
+Backups are stored on the dedicated backup disk mounted at `/var/lib/mysql_backups` (MySQL) or `/var/lib/postgresql_backups` (PostgreSQL):
 - `/<INSTANCE_NAME>/full/<YYYY-MM-DD>/`
 - `/<INSTANCE_NAME>/logs/<YYYY-MM-DD>/`
 
@@ -96,12 +96,13 @@ Backups are stored in `/mnt/backup` (mapped to `/var/lib/mysql_backups` or `/var
     ```
 
 2.  **Configure Variables:**
-    Edit the `terraform.tfvars` file to match your GCP environment. Key variables:
+    Create a `terraform.tfvars` file by copying `terraform.tfvars.example` and editing it to match your GCP environment. Key variables:
 
     ```terraform
     project_id = "Your-GCP-Project-ID"  # Replace with your actual GCP Project ID
     region     = "us-central1"          # Optional: Change to your desired region
     zone       = "us-central1-a"        # Optional: Change to your desired zone
+    db_password = "YourSecurePassword1!" # CRITICAL: Password for root/postgres
 
     # Optional: Configure existing or new network details
     network_name = "self-managed-dbs-vpc"    # Name for the VPC

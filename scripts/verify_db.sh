@@ -38,23 +38,20 @@ if [[ "$DB_TYPE" == "mysql" ]]; then
     # MySQL data dir is typically /var/lib/mysql, which is a symlink in our setup
     MYSQL_DATA_DIR="/var/lib/mysql"
     check_mount "$MYSQL_DATA_DIR" "$DATA_DIR_MOUNT"
-    export MYSQL_PWD='MyS@L_1nSt@nce!P@$$wOrd0'
+    # Use the .my.cnf file created by the setup script for authentication
     echo "VERIFY_DB: --- Attempting MySQL connection --- "
     set -x # Enable debug output
-    sudo --preserve-env=MYSQL_PWD mysql -u root -e "SELECT 1;"
+    sudo mysql --defaults-file=/root/.my.cnf -e "SELECT 1;"
     mysql_exit_code=$?
     set +x # Disable debug output
-    unset MYSQL_PWD
     echo "VERIFY_DB: --- MySQL connection attempt finished --- "
 
     if [ ${mysql_exit_code} -eq 0 ]; then
         echo "VERIFY_DB:   SUCCESS: Can connect to MySQL."
-        export MYSQL_PWD='MyS@L_1nSt@nce!P@$$wOrd0'
         echo "VERIFY_DB:   --- MySQL Version ---"
-        sudo --preserve-env=MYSQL_PWD mysql -u root -e "SELECT version();"
+        sudo mysql --defaults-file=/root/.my.cnf -e "SELECT version();"
         echo "VERIFY_DB:   --- MySQL Databases ---"
-        sudo --preserve-env=MYSQL_PWD mysql -u root -e "SHOW DATABASES;"
-        unset MYSQL_PWD
+        sudo mysql --defaults-file=/root/.my.cnf -e "SHOW DATABASES;"
     else
         echo "VERIFY_DB:   FAILURE: Cannot connect to MySQL. Exit code: ${mysql_exit_code}"
         echo "VERIFY_DB:   --- MySQL Log --- "
