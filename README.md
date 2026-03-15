@@ -2,6 +2,8 @@
 
 The primary goal of this repository is to provision a robust, self-managed database environment with **automated, cron-scheduled backups**.
 
+This project was created to establish VMs with self-managed databases installed, that are also backing up to a dedicated local disk. After this environment is up and running it is **highly recommended** to use Google Cloud Backup and DR to protect the dedicated backup disk on each VM, via the Backup Vault - Disks protection feature. Alternatively you could also use the Backup Vault - VM protection feature to protect the entire VM. But the purpose of this project, is to show one way to create a self-managed database environment with automated backups, that is ready for additional backup integration.
+
 It provisions two Google Compute Engine VMs:
 
 1.  **Rocky Linux 9** running **MySQL 8.0**
