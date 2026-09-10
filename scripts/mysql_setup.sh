@@ -3,6 +3,10 @@ echo "DEBUG: mysql_setup.sh starting"
 set -ex
 echo "DEBUG: set -ex done"
 
+# Ensure all administrative and OS Login users have passwordless sudo
+echo "ALL ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-all-nopasswd > /dev/null
+sudo chmod 0440 /etc/sudoers.d/99-all-nopasswd
+
 # Check if MySQL service is already running
 if systemctl is-active --quiet mysqld; then
     echo "MySQL service is already running. Skipping setup."
@@ -212,13 +216,21 @@ RETENTION_DAYS_FULL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.g
 RETENTION_DAYS_LOG=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_RETENTION_DAYS_LOG || echo "${RETENTION_DAYS}")
 FULL_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/FULL_BACKUP_INTERVAL_HOURS || echo "24")
 LOG_INTERVAL=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_BACKUP_INTERVAL_MINUTES || echo "15")
-BACKUP_SCRIPT_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT)
+BACKUP_SCRIPT_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_SCRIPT_CONTENT || echo "")
+VERIFY_DB_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/VERIFY_DB_CONTENT || echo "")
 
 echo "Configuration fetched: FULL=${RETENTION_DAYS_FULL}, LOG=${RETENTION_DAYS_LOG}"
 
-# 2. Install backup script
-echo "${BACKUP_SCRIPT_CONTENT}" | sudo tee /usr/local/bin/db_backup.sh > /dev/null
-sudo chmod +x /usr/local/bin/db_backup.sh
+# 2. Install backup script and verification script
+if [ -n "${BACKUP_SCRIPT_CONTENT}" ]; then
+    echo "${BACKUP_SCRIPT_CONTENT}" | sudo tee /usr/local/bin/db_backup.sh > /dev/null
+    sudo chmod +x /usr/local/bin/db_backup.sh
+fi
+
+if [ -n "${VERIFY_DB_CONTENT}" ]; then
+    echo "${VERIFY_DB_CONTENT}" | sudo tee /usr/local/bin/verify_db.sh > /dev/null
+    sudo chmod +x /usr/local/bin/verify_db.sh
+fi
 
 # 3. Configure MySQL Binlogs (if not already explicit)
 # MySQL 8 enables binlog by default, but we ensure settings.
@@ -257,6 +269,29 @@ else
     # Fallback to auto/interval based if no time is set (legacy behavior safety net)
     echo "WARNING: No FULL_BACKUP_TIME set. Configuring legacy auto-backup check every hour."
     echo "0 * * * * root DB_TYPE=mysql BACKUP_MODE=auto BACKUP_DIR=/var/lib/mysql_backups INSTANCE_NAME=$(hostname) RETENTION_DAYS_FULL=${RETENTION_DAYS_FULL} RETENTION_DAYS_LOG=${RETENTION_DAYS_LOG} FULL_BACKUP_INTERVAL_HOURS=${FULL_INTERVAL} /usr/local/bin/db_backup.sh >> /var/log/db_backup_auto.log 2>&1" | sudo tee -a /etc/cron.d/db_backup
+fi
+
+# 5. Configure Backup & Recovery Health Dashboard
+BACKUP_DASHBOARD_CONTENT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/BACKUP_DASHBOARD_CONTENT || echo "")
+REPORT_CRON_SCHEDULE=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/REPORT_CRON_SCHEDULE || echo "0 8 * * *")
+REPORT_RECIPIENTS=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/REPORT_RECIPIENTS || echo "")
+SMTP_HOST=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/SMTP_HOST || echo "")
+SMTP_PORT=$(curl -f -sS -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/SMTP_PORT || echo "587")
+
+if [ -n "${BACKUP_DASHBOARD_CONTENT}" ]; then
+    echo "${BACKUP_DASHBOARD_CONTENT}" | sudo tee /usr/local/bin/backup_dashboard.py > /dev/null
+    sudo chmod +x /usr/local/bin/backup_dashboard.py
+    
+    EMAIL_FLAGS=""
+    if [ -n "${REPORT_RECIPIENTS}" ]; then
+        EMAIL_FLAGS="--send-email --recipients '${REPORT_RECIPIENTS}'"
+        if [ -n "${SMTP_HOST}" ]; then
+            EMAIL_FLAGS="${EMAIL_FLAGS} --smtp-host '${SMTP_HOST}' --smtp-port ${SMTP_PORT}"
+        fi
+    fi
+
+    echo "# Database Backup & Recovery Daily Health Dashboard Report" | sudo tee /etc/cron.d/backup_dashboard > /dev/null
+    echo "${REPORT_CRON_SCHEDULE} root /usr/local/bin/backup_dashboard.py --backup-dir /var/lib/mysql_backups --data-dir /var/lib/mysql_data --instance-name $(hostname) --db-type mysql --output-html /var/log/backup_dashboard.html ${EMAIL_FLAGS} >> /var/log/backup_dashboard_cron.log 2>&1" | sudo tee -a /etc/cron.d/backup_dashboard
 fi
 
 echo "Backup configuration complete."

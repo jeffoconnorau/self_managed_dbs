@@ -4,6 +4,37 @@ zone       = "asia-southeast1-a"
 network_name = "argo-dev-vpc"
 subnetwork_name = "asia-southeast1-subnet"
 subnetwork_ip_cidr_range = "10.142.0.0/24"
-mysql_db_name = "db1"
-postgres_db_name = "db1"
-db_password      = "ChangeMe!123" # Default password, change for production
+db_password              = "ChangeMe!123" # Password for root/postgres/db2inst1
+vm_machine_type          = "e2-standard-4" # 4 vCPUs, 16 GB RAM (recommended minimum for enterprise DBs)
+
+# --- MySQL VM Configuration ---
+enable_mysql_vm    = true
+mysql_vm_name      = "rocky-mysql-vm"
+# Supported flavors: "rocky-linux-9", "rhel-9", "rhel-8", "ubuntu-2204", "debian-12"
+mysql_linux_flavor = "rocky-linux-9"
+mysql_db_name      = "db1"
+
+# --- PostgreSQL VM Configuration ---
+enable_postgres_vm    = true
+postgres_vm_name      = "ubuntu-postgres-vm"
+# Supported flavors: "ubuntu-2204", "debian-12", "rocky-linux-9", "rhel-9"
+postgres_linux_flavor = "ubuntu-2204"
+postgres_db_name      = "db1"
+
+# --- IBM Db2 VM Configuration ---
+enable_db2_vm     = false
+db2_vm_name       = "db2-backup-vm"
+# Supported flavors: "rocky-linux-9", "rhel-9", "rhel-8", "sles-15", "ubuntu-2204"
+db2_linux_flavor  = "ubuntu-2204"
+db2_db_name       = "db1"
+db2_instance_user = "db2inst1"
+# Optional: gs:// URL to Db2 installation tarball
+# db2_installer_url = "gs://your-bucket/v11.5.8_linuxx64_server_dec.tar.gz"
+
+# --- Automated Backup & Recovery Health Dashboard Email Reporting ---
+report_cron_schedule = "0 8 * * *" # Daily at 08:00 UTC
+# report_recipients   = "admin@example.com,dba-team@example.com"
+# smtp_host           = "smtp.sendgrid.net"
+# smtp_port           = 587
+# smtp_user           = "apikey"
+# smtp_password       = "your-api-key"

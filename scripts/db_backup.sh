@@ -18,8 +18,10 @@ set -eo pipefail
 BACKUP_ROOT="${BACKUP_DIR:-/mnt/backup}"
 RETENTION_DAYS="${RETENTION_DAYS:-3}"
 FULL_BACKUP_INTERVAL_HOURS="${FULL_BACKUP_INTERVAL_HOURS:-24}"
-# DB_TYPE must be set to 'mysql' or 'postgres'
+# DB_TYPE must be set to 'mysql', 'postgres', or 'db2'
 DB_TYPE="${DB_TYPE:-mysql}"
+# DB_NAME is required for db2 (defaults to db1)
+DB_NAME="${DB_NAME:-${DB2_DB_NAME:-db1}}"
 # BACKUP_MODE can be 'auto' (default), 'full', or 'log'
 BACKUP_MODE="${BACKUP_MODE:-auto}"
 # Optional credential inputs if not using .my.cnf or .pgpass (Preferred to use Env/Connect files)
@@ -42,6 +44,9 @@ LAST_FULL_BACKUP_FILE="${BACKUP_ROOT}/${INSTANCE_NAME}/last_full_backup_timestam
 if [ "$DB_TYPE" == "postgres" ]; then
     BACKUP_USER="postgres"
     BACKUP_GROUP="postgres"
+elif [ "$DB_TYPE" == "db2" ]; then
+    BACKUP_USER="${DB2_USER:-db2inst1}"
+    BACKUP_GROUP="${DB2_GROUP:-db2iadm1}"
 else
     BACKUP_USER="mysql"
     BACKUP_GROUP="mysql"
@@ -213,6 +218,62 @@ perform_postgres_log() {
     fi
 }
 
+perform_db2_full() {
+    log "Starting IBM Db2 Full Backup..."
+    local db_name="${DB_NAME:-${DB2_DB_NAME:-db1}}"
+    local db2_user="${DB2_USER:-db2inst1}"
+    
+    mkdir -p "${FULL_BACKUP_DIR}"
+    chown -R "${BACKUP_USER}:${BACKUP_GROUP}" "${FULL_BACKUP_DIR}"
+    
+    # In Db2, online backup requires archive logging (LOGARCHMETH1) to be enabled.
+    # We source db2profile to ensure environment and commands are available.
+    local backup_cmd=". ~${db2_user}/sqllib/db2profile && db2 backup database ${db_name} online to ${FULL_BACKUP_DIR} compress"
+    
+    log "  Executing Db2 online backup for database '${db_name}'..."
+    if su - "${db2_user}" -c "${backup_cmd}"; then
+        log "IBM Db2 Full Backup completed successfully."
+        date +%s > "$LAST_FULL_BACKUP_FILE"
+    else
+        log "ERROR: IBM Db2 Full Backup failed."
+        exit 1
+    fi
+}
+
+perform_db2_log() {
+    log "Starting IBM Db2 Log Backup..."
+    local db_name="${DB_NAME:-${DB2_DB_NAME:-db1}}"
+    local db2_user="${DB2_USER:-db2inst1}"
+    local staging_dir="${BACKUP_ROOT}/${INSTANCE_NAME}/log_staging"
+    
+    # Force truncation and archival of current active transaction log extent
+    log "  Triggering Db2 log archive for database '${db_name}'..."
+    local archive_cmd=". ~${db2_user}/sqllib/db2profile && db2 archive log for database ${db_name}"
+    su - "${db2_user}" -c "${archive_cmd}" || log "WARNING: Db2 archive log returned non-zero (db may be idle or active log already archived)."
+    
+    # Move archived logs from staging into dated backup directory
+    if [ -d "$staging_dir" ]; then
+        if [ "$(ls -A "$staging_dir" 2>/dev/null)" ]; then
+            rsync -av --remove-source-files "$staging_dir/" "${LOG_BACKUP_DIR}/"
+            chmod -R a+rX "${LOG_BACKUP_DIR}" 2>/dev/null || true
+            log "Moved Db2 archive logs from staging to ${LOG_BACKUP_DIR}/"
+        else
+            log "No new archive logs found in staging area (${staging_dir})."
+        fi
+    else
+        log "WARNING: Archive staging directory $staging_dir not found."
+    fi
+    
+    # Prune recovery history records older than log retention
+    local retain_logs=${RETENTION_DAYS_LOG:-3}
+    local prune_ts
+    prune_ts=$(date -d "${retain_logs} days ago" +"%Y%m%d%H%M%S")
+    local prune_cmd=". ~${db2_user}/sqllib/db2profile && db2 connect to ${db_name} >/dev/null && db2 prune history ${prune_ts} and delete && db2 terminate >/dev/null"
+    su - "${db2_user}" -c "${prune_cmd}" 2>/dev/null || true
+    
+    log "IBM Db2 Log Backup completed."
+}
+
 cleanup_retention() {
     log "Running retention cleanup for mode: ${BACKUP_MODE}..."
 
@@ -266,12 +327,16 @@ if should_run_full_backup; then
         perform_mysql_full
     elif [ "$DB_TYPE" == "postgres" ]; then
         perform_postgres_full
+    elif [ "$DB_TYPE" == "db2" ]; then
+        perform_db2_full
     fi
 else
     if [ "$DB_TYPE" == "mysql" ]; then
         perform_mysql_log
     elif [ "$DB_TYPE" == "postgres" ]; then
         perform_postgres_log
+    elif [ "$DB_TYPE" == "db2" ]; then
+        perform_db2_log
     fi
 fi
 

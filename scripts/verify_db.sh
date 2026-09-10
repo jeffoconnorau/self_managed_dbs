@@ -81,8 +81,45 @@ elif [[ "$DB_TYPE" == "postgres" ]]; then
         echo "VERIFY_DB:   FAILURE: Cannot connect to PostgreSQL."
         exit 1
     fi
+
+elif [[ "$DB_TYPE" == "db2" ]]; then
+    # Check if Db2 service or db2sysc engine process is active
+    if systemctl is-active --quiet db2 2>/dev/null; then
+        echo "VERIFY_DB:   SUCCESS: db2 systemd service is running."
+    elif pgrep -f db2sysc > /dev/null 2>&1; then
+        echo "VERIFY_DB:   SUCCESS: db2sysc process is running."
+    else
+        echo "VERIFY_DB:   WARNING: Db2 service not active. Attempting instance startup as db2inst1..."
+        su - db2inst1 -c "[ -f ~/sqllib/db2profile ] && . ~/sqllib/db2profile; db2start" || true
+        if pgrep -f db2sysc > /dev/null 2>&1; then
+            echo "VERIFY_DB:   SUCCESS: db2start succeeded; db2sysc running."
+        else
+            echo "VERIFY_DB:   FAILURE: Db2 engine is NOT running."
+            exit 1
+        fi
+    fi
+
+    # Db2 data directory is mounted on /var/lib/db2_data
+    DB2_DATA_DIR="/var/lib/db2_data"
+    check_mount "$DB2_DATA_DIR" "$DATA_DIR_MOUNT"
+
+    echo "VERIFY_DB: --- Checking Db2 Version ---"
+    su - db2inst1 -c "[ -f ~/sqllib/db2profile ] && . ~/sqllib/db2profile; db2level" || true
+
+    DB_NAME="${DB_NAME:-${2:-db1}}"
+    echo "VERIFY_DB: --- Attempting connection to Db2 database '${DB_NAME}' ---"
+    if su - db2inst1 -c "[ -f ~/sqllib/db2profile ] && . ~/sqllib/db2profile; db2 'connect to ${DB_NAME}'" > /dev/null 2>&1; then
+        echo "VERIFY_DB:   SUCCESS: Can connect to Db2 database '${DB_NAME}'."
+        echo "VERIFY_DB:   --- Db2 Database Details ---"
+        su - db2inst1 -c "[ -f ~/sqllib/db2profile ] && . ~/sqllib/db2profile; db2 'connect to ${DB_NAME}' >/dev/null; db2 'select current timestamp, current server from sysibm.sysdummy1'; db2 terminate"
+        echo "VERIFY_DB:   --- Db2 Log Archiving Configuration ---"
+        su - db2inst1 -c "[ -f ~/sqllib/db2profile ] && . ~/sqllib/db2profile; db2 'get db cfg for ${DB_NAME}' | grep -i 'logarchmeth1'" || true
+    else
+        echo "VERIFY_DB:   FAILURE: Cannot connect to Db2 database '${DB_NAME}'."
+        exit 1
+    fi
 else
-    echo "VERIFY_DB:   FAILURE: Unknown DB_TYPE '$DB_TYPE'. Use 'mysql' or 'postgres'."
+    echo "VERIFY_DB:   FAILURE: Unknown DB_TYPE '$DB_TYPE'. Use 'mysql', 'postgres', or 'db2'."
     exit 1
 fi
 
