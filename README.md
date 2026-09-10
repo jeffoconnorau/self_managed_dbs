@@ -25,7 +25,7 @@ The repository provides automated, modular provisioning and backup automation fo
     *   Unattended silent installation via response file (`db2server.rsp`) and helper automation (`install_db2.sh`).
     *   Native integration with Db2 continuous log archiving (`LOGARCHMETH1`) and online compressed backups.
 *   **Daily Backup & Recovery Health Dashboard (`scripts/backup_dashboard.py`):**
-    *   Dark-themed, high-fidelity HTML dashboard matching modern operational observability standards.
+    *   Dark-themed, high-fidelity HTML dashboard matching modern operational observability standards ([preview sample report](sample_dashboard.html)).
     *   Automated daily email delivery to stakeholders on a cron schedule.
     *   Insights on:
         1. **Backup Times & Durations:** Exact timestamps, elapsed times, and execution status.
@@ -265,7 +265,13 @@ To test emailing the report immediately to one or more recipients:
 
 #### 4. Preview Dashboard with Sample Data (Local Workstation)
 
-To preview the dashboard design locally without connecting to a VM:
+A complete, pre-rendered, and sanitized example report generated from a live IBM Db2 environment is included in the root of this repository:
+```bash
+open sample_dashboard.html  # macOS
+# or view sample_dashboard.html in any web browser
+```
+
+Alternatively, you can generate a fresh mock preview on your workstation at any time:
 ```bash
 python3 scripts/backup_dashboard.py --sample-data --output-html ./preview_dashboard.html
 open ./preview_dashboard.html  # macOS

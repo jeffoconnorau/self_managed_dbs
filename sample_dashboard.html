@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Backup & Recovery Health Dashboard - Sample Output</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-success: #10b981;
+            --accent-success-glow: rgba(16, 185, 129, 0.15);
+            --accent-blue: #3b82f6;
+            --accent-blue-glow: rgba(59, 130, 246, 0.15);
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-warning: #f59e0b;
+            --accent-warning-glow: rgba(245, 158, 11, 0.15);
+            --accent-danger: #ef4444;
+            --border-color: #374151;
+            --glow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 2rem;
+            position: relative;
+        }
+
+        .badge-status {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 40%, #9ca3af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--glow-card);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-blue);
+        }
+
+        .stat-card.success-card {
+            border-left: 4px solid var(--accent-success);
+        }
+
+        .stat-card.blue-card {
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .stat-card.cyan-card {
+            border-left: 4px solid var(--accent-cyan);
+        }
+
+        .stat-card.purple-card {
+            border-left: 4px solid var(--accent-purple);
+        }
+
+        .stat-card.warning-card {
+            border-left: 4px solid var(--accent-warning);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 80% 20%, var(--accent-blue-glow), transparent 45%);
+            pointer-events: none;
+        }
+
+        .stat-card.purple-card::before {
+            background: radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.18), transparent 45%);
+        }
+
+        .stat-label {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.85rem;
+            font-weight: 600;
+        }
+
+        .stat-sub {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 0.3rem;
+        }
+
+        .status-ok {
+            color: var(--accent-success);
+            text-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+        }
+
+        .status-warning {
+            color: var(--accent-warning);
+            text-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+        }
+
+        .status-critical {
+            color: var(--accent-danger);
+            text-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+        }
+
+        section {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: var(--glow-card);
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 1.25rem;
+            background-color: var(--accent-blue);
+            border-radius: 2px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 1.2rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+            vertical-align: top;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-optimal {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .badge-warning {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+
+        .badge-critical {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        /* Storage Cards & Dual-Track Breakdown */
+        .storage-cards-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .storage-card {
+            background-color: rgba(17, 24, 39, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            box-shadow: var(--glow-card);
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .storage-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .storage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            border-bottom: 1px solid rgba(55, 65, 81, 0.4);
+            padding-bottom: 0.75rem;
+        }
+
+        .volume-track-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .volume-track-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .gantt-track {
+            background-color: var(--bg-tertiary);
+            border-radius: 8px;
+            height: 32px;
+            position: relative;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid rgba(55, 65, 81, 0.6);
+        }
+
+        .gantt-bar {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 0.6rem;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: width 0.3s ease;
+        }
+
+        .full-bar {
+            background: linear-gradient(90deg, #2563eb, #3b82f6);
+        }
+
+        .log-bar {
+            background: linear-gradient(90deg, #0891b2, #06b6d4);
+        }
+
+        .free-bar {
+            background-color: #1f2937;
+        }
+
+        .prod-bar {
+            background: linear-gradient(90deg, #6d28d9, #8b5cf6);
+        }
+
+        .prod-free-bar {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.35));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .gantt-tag {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .gantt-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            padding-top: 1rem;
+            border-top: 1px solid rgba(55, 65, 81, 0.4);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .legend-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .full-dot { background: #3b82f6; }
+        .log-dot { background: #06b6d4; }
+        .free-dot { background: #1f2937; border: 1px solid #4b5563; }
+        .prod-dot { background: #8b5cf6; }
+        .prod-free-dot { background: #059669; }
+
+        .timeline-box {
+            background-color: rgba(31, 41, 55, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .file-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .file-list li {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            padding: 0.2rem 0;
+        }
+
+        code {
+            font-family: monospace;
+            background-color: var(--bg-tertiary);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #e5e7eb;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 3rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge-status">ALL SYSTEMS HEALTHY - 100% SLA COMPLIANT</div>
+            <h1>Database Backup & Recovery Health Dashboard</h1>
+            <div class="subtitle">
+                Automated Protection Audit &bull; Generated: 2026-09-10 08:34:34 UTC &bull; Host: db2-backup-vm
+            </div>
+        </header>
+
+        <!-- Stats Overview Grid -->
+        <div class="stats-grid">
+            <div class="stat-card success-card">
+                <div class="stat-label">Protection Status</div>
+                <div class="stat-value status-ok">1/1 Active</div>
+                <div class="stat-sub">0 Critical &bull; 0 Warnings</div>
+            </div>
+            <div class="stat-card blue-card">
+                <div class="stat-label">Achieved RPO Window</div>
+                <div class="stat-value">4m 30s</div>
+                <div class="stat-sub">Target SLA: &le; 15 Minutes</div>
+            </div>
+            <div class="stat-card cyan-card">
+                <div class="stat-label">Backup Storage Consumed</div>
+                <div class="stat-value">100.98 MB</div>
+                <div class="stat-sub">0.5% used of 19.51 GB Dedicated Capacity</div>
+            </div>
+            <div class="stat-card purple-card">
+                <div class="stat-label">Production Storage Headroom</div>
+                <div class="stat-value" style="color: #34d399;">19.10 GB Free</div>
+                <div class="stat-sub">97.9% available (423.55 MB / 19.51 GB used)</div>
+            </div>
+            <div class="stat-card warning-card">
+                <div class="stat-label">Avg Local Recovery Window</div>
+                <div class="stat-value">0.0 Days</div>
+                <div class="stat-sub">Point-in-Time Recovery from Disk</div>
+            </div>
+        </div>
+
+        <!-- Protection Summary Table -->
+        <section>
+            <h2>Database Instance Protection Summary</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Database / Host</th>
+                            <th>RPO Status</th>
+                            <th>Latest Full Backup</th>
+                            <th>Continuous Archive Logs</th>
+                            <th>Production Data Volume</th>
+                            <th>Backup Volume & Local PITR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+        <tr>
+            <td>
+                <strong>db2-backup-vm</strong><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">IBM Db2 11.5</span>
+            </td>
+            <td>
+                <span class="status-badge badge-optimal">OPTIMAL</span><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;">4m 30s (SLA: 15m)</span>
+            </td>
+            <td>
+                <strong>2026-09-10 08:16:26 UTC</strong><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">18m ago &bull; 100.59 MB</span>
+            </td>
+            <td>
+                <strong>2026-09-10 08:30:04 UTC</strong><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">4 logs archived &bull; 392.00 KB</span>
+            </td>
+            <td>
+                <strong style="color: #34d399;">19.10 GB Free</strong> <span style="font-size: 0.78rem; color: var(--text-secondary);">(97.9% available)</span><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">Vol: <code>data_vg/data_lv</code> &bull; <code>/var/lib/db2_data</code></span><br/>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">423.55 MB used of 19.51 GB</span>
+            </td>
+            <td>
+                <strong>100.98 MB Used</strong> <span style="font-size: 0.78rem; color: var(--text-secondary);">(19.40 GB free)</span><br/>
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">Vol: <code>backup_vg/backup_lv</code> &bull; <code>/var/lib/db2_backups</code></span><br/>
+                <span style="font-size: 0.78rem; color: var(--accent-blue); font-weight: 600;">0.0 days (15m)</span>
+            </td>
+        </tr>
+        
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Local Disk Recovery & Storage Visual Breakdown -->
+        <section>
+            <h2>Local Disk Storage Allocation & Retention Breakdown</h2>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Visual breakdown tracking dedicated persistent disk allocation for both <strong>Backup Storage Volumes</strong> (Full Backups vs Continuous Archive Logs) and <strong>Production Data Volumes</strong> (Active DB Data vs Free Growth Headroom).
+            </p>
+            <div class="storage-cards-container">
+                
+        <div class="storage-card">
+            <div class="storage-header">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">db2-backup-vm</span>
+                    <span style="font-size: 0.75rem; background: var(--bg-tertiary); padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-secondary);">IBM Db2 11.5</span>
+                    <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600;">0.0d Local PITR Window</span>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                    RPO: <strong style="color: #fff;">4m 30s</strong> &bull; Target SLA: &le; 15m
+                </div>
+            </div>
+
+            <!-- Backup Volume Track -->
+            <div class="volume-track-container">
+                <div class="volume-track-label">
+                    <div style="display: flex; align-items: center; gap: 0.45rem;">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-cyan);"></span>
+                        <strong style="font-size: 0.88rem; color: var(--text-primary);">Backup Volume:</strong>
+                        <code>backup_vg/backup_lv</code>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                        Mount: <code>/var/lib/db2_backups</code> &bull; Total: <strong>19.51 GB</strong> &bull; Used: <strong>100.98 MB</strong> &bull; Free: <span style="color: #34d399; font-weight: 600;">19.40 GB</span>
+                    </div>
+                </div>
+                <div class="gantt-track">
+                    <div class="gantt-bar full-bar" style="width: 0.5%;" title="Full Backups: 100.59 MB (0.5%)">
+                        <span class="gantt-tag">Full: 100.59 MB</span>
+                    </div>
+                    <div class="gantt-bar log-bar" style="width: 0.0%;" title="Continuous Logs: 392.00 KB (0.0%)">
+                        <span class="gantt-tag">Logs: 392.00 KB</span>
+                    </div>
+                    <div class="gantt-bar free-bar" style="width: 99.5%;" title="Backup Volume Available: 19.40 GB (99.5%)">
+                        <span class="gantt-tag" style="color: var(--text-secondary);">Free: 19.40 GB</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Production Data Volume Track -->
+            <div class="volume-track-container" style="margin-top: 1rem;">
+                <div class="volume-track-label">
+                    <div style="display: flex; align-items: center; gap: 0.45rem;">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6;"></span>
+                        <strong style="font-size: 0.88rem; color: var(--text-primary);">Production Data Volume:</strong>
+                        <code>data_vg/data_lv</code>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                        Mount: <code>/var/lib/db2_data</code> &bull; Total: <strong>19.51 GB</strong> &bull; Used: <strong>423.55 MB</strong> &bull; Available Headroom: <span style="color: #34d399; font-weight: 600;">19.10 GB (97.9%)</span>
+                    </div>
+                </div>
+                <div class="gantt-track">
+                    <div class="gantt-bar prod-bar" style="width: 2.1%;" title="Production DB Data: 423.55 MB (2.1%)">
+                        <span class="gantt-tag">DB Data: 423.55 MB</span>
+                    </div>
+                    <div class="gantt-bar prod-free-bar" style="width: 97.9%;" title="Production Available Headroom: 19.10 GB (97.9%)">
+                        <span class="gantt-tag" style="color: #a7f3d0;">Available Headroom: 19.10 GB (97.9%)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+            </div>
+            <div class="gantt-legend">
+                <div class="legend-item"><span class="legend-dot full-dot"></span> Full Backups</div>
+                <div class="legend-item"><span class="legend-dot log-dot"></span> Continuous Archive Logs (PITR)</div>
+                <div class="legend-item"><span class="legend-dot free-dot"></span> Backup Volume Available</div>
+                <div class="legend-item"><span class="legend-dot prod-dot"></span> Production DB Data</div>
+                <div class="legend-item"><span class="legend-dot prod-free-dot"></span> Production Available Headroom</div>
+            </div>
+        </section>
+
+        <!-- Recent Backup Activity Details -->
+        <section>
+            <h2>Recent Backup Artifacts & History Log</h2>
+            
+        <div class="timeline-box">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <div>
+                    <h3 style="font-size: 1.1rem; color: var(--accent-blue); display: inline-block; margin-right: 0.5rem;">db2-backup-vm</h3>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">(IBM Db2 11.5)</span>
+                </div>
+                <div>
+                    <span class="status-badge badge-optimal">OPTIMAL</span>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; background: rgba(17, 24, 39, 0.4); padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid rgba(55, 65, 81, 0.5);">
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--accent-cyan); text-transform: uppercase; font-weight: 700; display: block; letter-spacing: 0.05em;">Backup Storage Volume</span>
+                    <div style="font-size: 0.85rem; margin-top: 0.3rem;">
+                        <strong>Device:</strong> <code>backup_vg/backup_lv</code> <span style="font-size: 0.75rem; color: var(--text-secondary);">(/dev/mapper/backup_vg-backup_lv)</span><br/>
+                        <strong>Mount:</strong> <code>/var/lib/db2_backups</code><br/>
+                        <strong>Capacity:</strong> 19.51 GB &bull; 100.98 MB used &bull; <span style="color: #34d399; font-weight: 600;">19.40 GB free</span>
+                    </div>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #a78bfa; text-transform: uppercase; font-weight: 700; display: block; letter-spacing: 0.05em;">Production Data Volume</span>
+                    <div style="font-size: 0.85rem; margin-top: 0.3rem;">
+                        <strong>Device:</strong> <code>data_vg/data_lv</code> <span style="font-size: 0.75rem; color: var(--text-secondary);">(/dev/mapper/data_vg-data_lv)</span><br/>
+                        <strong>Mount:</strong> <code>/var/lib/db2_data</code><br/>
+                        <strong>Capacity:</strong> 19.51 GB &bull; 423.55 MB used &bull; <span style="color: #34d399; font-weight: 600;">19.10 GB (97.9% headroom)</span>
+                    </div>
+                </div>
+            </div>
+
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.8rem;">
+                Target RPO SLA: <strong>&le; 15m</strong> &bull; Retention Policy: <strong>3d Full</strong>, <strong>3d Logs</strong> &bull; Local Recovery Window: <strong style="color: var(--accent-blue);">0.0 days (15m)</strong>
+            </p>
+
+            <div style="font-size: 0.85rem; margin-bottom: 0.4rem;"><strong>Recent Full Backups:</strong></div>
+            <ul class="file-list"><li><code>DB1.0.db2inst1.DBPART000.20260910081434.001</code> (48.04 MB) - 2026-09-10 08:14:43 UTC</li><li><code>DB1.0.db2inst1.DBPART000.20260910081617.001</code> (52.55 MB) - 2026-09-10 08:16:26 UTC</li></ul>
+            <div style="font-size: 0.85rem; margin-top: 0.6rem; margin-bottom: 0.4rem;"><strong>Latest Continuous Archive Logs:</strong></div>
+            <ul class="file-list"><li><code>S0000001.LOG</code> (12.00 KB) - 2026-09-10 08:16:26 UTC</li><li><code>S0000002.LOG</code> (12.00 KB) - 2026-09-10 08:16:37 UTC</li><li><code>S0000003.LOG</code> (356.00 KB) - 2026-09-10 08:30:04 UTC</li></ul>
+        </div>
+        
+        </section>
+
+        <footer>
+            Self-Managed Databases on Google Compute Engine &bull; Automated Daily Protection Dashboard &bull; IBM Db2, PostgreSQL & MySQL Support
+        </footer>
+    </div>
+</body>
+</html>
